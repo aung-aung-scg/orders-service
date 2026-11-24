@@ -63,3 +63,69 @@ model WebhookEvent {
 
   @@index([type, processedAt])
 }
+
+enum TableOrderStatus {
+  OPEN
+  SUBMITTED
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+}
+
+model DiningTable {
+  id      String       @id @default(uuid())
+  number  Int          @unique
+  qrToken String       @unique
+  active  Boolean      @default(true)
+  orders  TableOrder[]
+}
+
+model MenuItem {
+  id        String           @id @default(uuid())
+  name      String
+  priceMinor Int
+  available Boolean          @default(true)
+  lines     TableOrderItem[]
+}
+
+model TableOrder {
+  id          String           @id @default(uuid())
+  tableId     String
+  status      TableOrderStatus @default(OPEN)
+  totalMinor  Int              @default(0)
+  submittedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  table       DiningTable      @relation(fields: [tableId], references: [id])
+  items       TableOrderItem[]
+
+  @@index([tableId])
+}
+
+model TableOrderItem {
+  id             String     @id @default(uuid())
+  orderId        String
+  menuItemId     String
+  nameSnapshot   String
+  unitPriceMinor Int
+  quantity       Int
+  note           String?
+  order          TableOrder @relation(fields: [orderId], references: [id])
+  menuItem       MenuItem   @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+}
+
+enum StaffRole {
+  ADMIN
+  KITCHEN
+}
+
+model StaffUser {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  passwordHash String
+  role         StaffRole
+  createdAt    DateTime  @default(now())
+}

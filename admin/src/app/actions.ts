@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
+import { adminRoles, requireRole } from "@/lib/auth";
 import { BackendError, createOrder, createProduct, productsTag } from "@/lib/api";
 
 export type FormState = { error?: string; success?: string };
@@ -34,6 +35,7 @@ function formError(error: unknown): FormState {
 }
 
 export async function addProduct(_previous: FormState, form: FormData): Promise<FormState> {
+  await requireRole(adminRoles, { next: "/products" });
   const input = productFields.safeParse({ name: form.get("name") ?? "", stock: form.get("stock") ?? "" });
   if (!input.success) return { error: input.error.issues.map(issue => issue.message).join(" ") };
 
@@ -48,6 +50,7 @@ export async function addProduct(_previous: FormState, form: FormData): Promise<
 }
 
 export async function addOrder(_previous: FormState, form: FormData): Promise<FormState> {
+  await requireRole(adminRoles, { next: "/orders" });
   const input = orderFields.safeParse({ productId: form.get("productId") ?? "", quantity: form.get("quantity") ?? "" });
   if (!input.success) return { error: input.error.issues.map(issue => issue.message).join(" ") };
 

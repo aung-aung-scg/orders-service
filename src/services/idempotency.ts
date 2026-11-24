@@ -6,18 +6,7 @@ import type { OrderInput } from '../schemas/index.js'
 import { createOrder } from './orders.js'
 
 export async function submitOrder(db: PrismaClient, input: OrderInput, key: string) {
-  // Zod constructs objects in schema order, so JSON property order is immaterial.
-  const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex')
-  return db.$transaction(async tx => {
-    await lockTransaction(tx, 'idempotency', key)
-    const existing = await tx.idempotencyRecord.findUnique({ where: { key } })
-    if (existing) {
-      if (existing.requestHash !== requestHash) {
-        throw new HttpError(422, 'IDEMPOTENCY_MISMATCH', 'This idempotency key was used with a different body')
-      }
-      return existing
-    }
-
+  return withIdempotency(db, input, key, async tx => {
     let responseStatus = 201
     let responseBody: Prisma.InputJsonObject
     await tx.$executeRaw`SAVEPOINT order_attempt`
@@ -40,6 +29,30 @@ export async function submitOrder(db: PrismaClient, input: OrderInput, key: stri
       responseStatus = 409
     }
     await tx.$executeRaw`RELEASE SAVEPOINT order_attempt`
-    return tx.idempotencyRecord.create({ data: { key, requestHash, responseStatus, responseBody } })
+    return { responseStatus, responseBody }
+  })
+}
+
+export async function withIdempotency(
+  db: PrismaClient,
+  input: object,
+  key: string,
+  execute: (tx: Prisma.TransactionClient) => Promise<{ responseStatus: number; responseBody: Prisma.InputJsonObject }>,
+) {
+  // Zod constructs objects in schema order, so JSON property order is immaterial.
+  const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex')
+  return db.$transaction(async tx => {
+    await lockTransaction(tx, 'idempotency', key)
+    const existing = await tx.idempotencyRecord.findUnique({ where: { key } })
+    if (existing) {
+      if (existing.requestHash !== requestHash) {
+        throw new HttpError(422, 'IDEMPOTENCY_MISMATCH', 'This idempotency key was used with a different body')
+      }
+      return { ...existing, replayed: true }
+    }
+
+    const response = await execute(tx)
+    const stored = await tx.idempotencyRecord.create({ data: { key, requestHash, ...response } })
+    return { ...stored, replayed: false }
   }, { isolationLevel: 'ReadCommitted', maxWait: 15000, timeout: 15000 })
 }

@@ -30,16 +30,19 @@ export class BackendError extends Error {
   }
 }
 
-async function request<T>(path: string, schema: z.ZodType<T>, options: RequestInit): Promise<T> {
+export async function backendFetch(path: string, options: RequestInit) {
   const baseUrl = process.env.BACKEND_URL;
   if (!baseUrl) throw new Error("BACKEND_URL is required");
 
-  let response: Response;
   try {
-    response = await fetch(new URL(path, baseUrl), options);
+    return await fetch(new URL(path, baseUrl), options);
   } catch (cause) {
     throw new Error(`Could not reach backend for ${path}`, { cause });
   }
+}
+
+export async function request<T>(path: string, schema: z.ZodType<T>, options: RequestInit): Promise<T> {
+  const response = await backendFetch(path, options);
   const data: unknown = await response.json().catch(() => undefined);
   if (!response.ok) {
     const error = errorResponse.safeParse(data);

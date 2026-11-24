@@ -26,6 +26,7 @@ label { display: grid; gap: .25rem; min-width: 0; }
 input, select, button { font: inherit; padding: .45rem; min-width: 0; }
 button { background: #174b85; color: #fff; border: 1px solid #174b85; border-radius: .25rem; }
 button:disabled { opacity: .65; }
+.logout-form { margin: 0 0 0 auto; padding: 0; border: 0; }
 form p { flex-basis: 100%; margin: 0; }
 .error { color: #a31522; }
 

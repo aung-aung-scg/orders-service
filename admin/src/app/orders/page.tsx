@@ -1,8 +1,10 @@
 import { connection } from "next/server";
+import { adminRoles, requireRole } from "@/lib/auth";
 import { getOrders, getProducts } from "@/lib/api";
 import { OrderForm } from "../forms";
 
 export default async function OrdersPage() {
+  await requireRole(adminRoles, { next: "/orders" });
   await connection();
   const [orders, products] = await Promise.all([getOrders(), getProducts()]);
   const productNames = new Map(products.map(({ id, name }) => [id, name]));

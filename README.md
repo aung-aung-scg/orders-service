@@ -33,6 +33,24 @@ The layout and list pages are Server Components. They render the lists and read 
 
 Both pages share the `GET /products` Data Cache entry, tagged `products` with a 30-second revalidation interval. Successful product creation and order placement expire the tag immediately so inventory changes appear on the next render. `GET /orders` is fetched on every server render, and writes bypass the cache.
 
+## POS table ordering
+
+- Run `npx prisma migrate deploy` and `npm run db:seed` after the local database setup. The seed creates five tables and ten menu items.
+- Print codes from admin `/tables`. A guest scans a QR code to open `/t/{qrToken}`, shares the table cart, and places an order. Staff use `/kitchen` to move tickets through Preparing, Ready, and Served. The customer page checks status every five seconds.
+- Fastify customer API: `GET /t/:qrToken`, `POST /t/:qrToken/order/items`, `PATCH /t/:qrToken/order/items/:itemId`, and `POST /t/:qrToken/order/submit` with an `Idempotency-Key`.
+- Protected Fastify API: `GET /kitchen/orders`, `PATCH /kitchen/orders/:id/status`, `GET /kitchen/stream`, `GET /tables`, `POST /tables`, and `GET /tables/:id/qr`.
+- Set the same `KITCHEN_API_KEY` in backend `.env` and `admin/.env.local`. Next.js sends it as `X-Kitchen-API-Key` on the server. Keep `BACKEND_URL` in `admin/.env.local`. Set backend `PUBLIC_BASE_URL` to the admin origin reachable by guest phones. It defaults to `http://localhost:3001`.
+- QR URLs use random tokens. The server stores prices in integer satang, snapshots item names and prices, and computes totals in the cart transaction. A partial unique index limits each table to one open cart. Reusing a submit key replays the ticket response.
+- SSE sends an active-ticket snapshot first and updates after commits. The kitchen board uses a server-side SSE proxy and polls every five seconds when disconnected.
+- The 30-writes-per-minute limit per table and SSE event bus are per process. Multiple instances need a shared limiter and Redis pub/sub or PostgreSQL `LISTEN/NOTIFY`. The flow has no payment handling.
+
+## Staff auth
+
+- Set `STAFF_ADMIN_PASSWORD` and `STAFF_KITCHEN_PASSWORD` in the backend `.env`, apply migrations, and run `npm run db:seed:staff` to create or update the `admin` and `kitchen` users.
+- Set the same `KITCHEN_API_KEY` in both apps and a random `JWT_SECRET` of at least 32 characters in `admin/.env.local`. Next.js verifies credentials through Fastify and sets an eight-hour HTTP-only session cookie. Use HTTPS in production.
+- ADMIN can use all staff pages. KITCHEN can use the kitchen board and its live feed. Guest table QR pages are public.
+- The login limit is five failed attempts per username and IP in 15 minutes, in memory per instance. Configure the ingress to overwrite `X-Forwarded-For` with the client IP. Sessions have no refresh tokens or early server-side revocation. Rotating the single signing secret invalidates all sessions.
+
 ## API
 
 | Request | Input and result |

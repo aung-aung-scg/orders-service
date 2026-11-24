@@ -1,17 +1,24 @@
+import { EventEmitter } from 'node:events'
 import Fastify from 'fastify'
 import { ZodError } from 'zod'
 import { Prisma } from '../generated/prisma/client.js'
 import { createDb } from './lib/db.js'
 import { HttpError } from './lib/errors.js'
 import { registerOrders } from './routes/orders.js'
+import { registerKitchen } from './routes/kitchen.js'
+import { registerStaffAuth } from './routes/staff-auth.js'
+import { registerTableOrders } from './routes/table-orders.js'
+import { registerTables } from './routes/tables.js'
 import { registerProducts } from './routes/products.js'
 import { registerWebhooks } from './routes/webhooks.js'
-import { readEnv } from './lib/env.js'
+import { readEnv, readPosEnv } from './lib/env.js'
 
-export function buildApp(options: { db?: ReturnType<typeof createDb>; logger?: boolean; webhookSecret?: string } = {}) {
+export function buildApp(options: { db?: ReturnType<typeof createDb>; logger?: boolean; webhookSecret?: string; kitchenApiKey?: string } = {}) {
   const secret = options.webhookSecret ?? readEnv().WEBHOOK_SECRET
+  const { KITCHEN_API_KEY, PUBLIC_BASE_URL } = readPosEnv()
   const db = options.db ?? createDb()
   const app = Fastify({ logger: options.logger ?? false })
+  const kitchenEvents = new EventEmitter().setMaxListeners(0)
   if (!options.db) app.addHook('onClose', () => db.$disconnect())
 
   app.setNotFoundHandler((_request, reply) => {
@@ -41,6 +48,12 @@ export function buildApp(options: { db?: ReturnType<typeof createDb>; logger?: b
 
   registerProducts(app, db)
   registerOrders(app, db)
+  registerTableOrders(app, db, kitchenEvents)
+  app.register(async scope => {
+    registerKitchen(scope, db, options.kitchenApiKey ?? KITCHEN_API_KEY, kitchenEvents)
+    registerStaffAuth(scope, db)
+    registerTables(scope, db, PUBLIC_BASE_URL)
+  })
   app.register(async scope => registerWebhooks(scope, db, secret))
   return app
 }

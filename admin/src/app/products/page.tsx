@@ -1,8 +1,10 @@
 import { connection } from "next/server";
+import { adminRoles, requireRole } from "@/lib/auth";
 import { getProducts } from "@/lib/api";
 import { ProductForm } from "../forms";
 
 export default async function ProductsPage() {
+  await requireRole(adminRoles, { next: "/products" });
   await connection();
   const products = await getProducts();
 
