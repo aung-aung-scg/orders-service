@@ -17,12 +17,29 @@ npm run dev
 
 The API listens on port 3000 by default. For a compiled start, run `node dist/src/server.js`. The database suites use the real PostgreSQL instance at `DATABASE_URL` and leave their uniquely identified sample records in the database. Use the local development database or a dedicated test database. If host port 5433 is occupied, set `POSTGRES_HOST_PORT` for Compose and use the same port in `DATABASE_URL`.
 
+## Admin app
+
+Start PostgreSQL and run `npm run dev` from the repository root using the setup above. In a second terminal, create `admin/.env.local` with `BACKEND_URL=http://localhost:3000`, then run:
+
+```sh
+cd admin
+npm ci
+npm run dev
+```
+
+Open [the admin app](http://localhost:3001). For a production build, run `npm run build` in `admin` and serve it with `npm start -- -p 3001`.
+
+The layout and list pages are Server Components. They render the lists and read data through a server-only backend client, which keeps `BACKEND_URL` on the server. The forms are Client Components so `useActionState` can show pending, success, and validation feedback. Server Actions validate submissions and call the backend. The order form submits one line item and generates a fresh idempotency key on the server for each submission.
+
+Both pages share the `GET /products` Data Cache entry, tagged `products` with a 30-second revalidation interval. Successful product creation and order placement expire the tag immediately so inventory changes appear on the next render. `GET /orders` is fetched on every server render, and writes bypass the cache.
+
 ## API
 
 | Request | Input and result |
 | --- | --- |
 | `POST /products` | Send `{"name":"Widget","stock":10}`. Returns the created product with HTTP 201. |
 | `GET /products` | Returns the product list with HTTP 200. |
+| `GET /orders` | Returns orders newest first, with their status and items, with HTTP 200. |
 | `POST /orders` | Send an `Idempotency-Key` header and `{"items":[{"productId":"<product-id>","quantity":1}]}`. Returns the order with HTTP 201. Supply an optional top-level `id` when the payment sender already knows the order reference. Stock conflicts return 409 and key reuse with different input returns 422. |
 | `POST /webhooks/payments` | Send JSON such as `{"eventId":"evt-1","type":"payment.succeeded","orderId":"demo-order"}` and set `X-Signature` to the hex HMAC-SHA256 of the exact request bytes using `WEBHOOK_SECRET`. Accepted events, including duplicates, return 200. A bad signature returns 401. |
 
