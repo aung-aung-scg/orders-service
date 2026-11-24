@@ -1,0 +1,4 @@
+[
+  { "id": "demo-order", "status": "PAID" },
+  { "id": "partner-only-order", "status": "CANCELLED" }
+]

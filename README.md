@@ -1,0 +1,60 @@
+# Orders service
+
+A Fastify API for inventory, orders, and signed payment events, backed by PostgreSQL 16 and Prisma 7.
+
+## Run locally
+
+Use Node 22.12+ (22.x) or Node 24+ for local development, along with npm and Docker Compose. The API image runs on Node 20, where npm reports engine warnings for transitive dependencies. Copy `.env.example` to `.env` and set a `WEBHOOK_SECRET` shared with the payment sender. The example database URL matches the Compose credentials and host port 5433.
+
+```sh
+npm ci
+docker compose up -d --wait
+npm run db:migrate
+npm run build
+npm test
+npm run dev
+```
+
+The API listens on port 3000 by default. For a compiled start, run `node dist/src/server.js`. The database suites use the real PostgreSQL instance at `DATABASE_URL` and leave their uniquely identified sample records in the database. Use the local development database or a dedicated test database. If host port 5433 is occupied, set `POSTGRES_HOST_PORT` for Compose and use the same port in `DATABASE_URL`.
+
+## API
+
+| Request | Input and result |
+| --- | --- |
+| `POST /products` | Send `{"name":"Widget","stock":10}`. Returns the created product with HTTP 201. |
+| `GET /products` | Returns the product list with HTTP 200. |
+| `POST /orders` | Send an `Idempotency-Key` header and `{"items":[{"productId":"<product-id>","quantity":1}]}`. Returns the order with HTTP 201. Supply an optional top-level `id` when the payment sender already knows the order reference. Stock conflicts return 409 and key reuse with different input returns 422. |
+| `POST /webhooks/payments` | Send JSON such as `{"eventId":"evt-1","type":"payment.succeeded","orderId":"demo-order"}` and set `X-Signature` to the hex HMAC-SHA256 of the exact request bytes using `WEBHOOK_SECRET`. Accepted events, including duplicates, return 200. A bad signature returns 401. |
+
+Errors have a string `code`, a string `message`, and optional `details`. Request validation failures return 400.
+
+## Reconciliation
+
+Run `npm run reconcile` to print a JSON array of mismatches between PostgreSQL orders and `fixtures/partner-orders.json`. An empty array means both lists agree. The command reports differences without writing to either system. The fixture is a mock, so its records illustrate the following resolution rules for a verified partner feed.
+
+| Mismatch | Authority and rationale |
+| --- | --- |
+| Missing locally | The partner is authoritative about its payment record. Investigate the missing order and recover it through the order workflow so inventory and order items are accounted for. |
+| Missing at partner | The local service is authoritative about order existence and stock reservations. Keep the local order and investigate partner ingestion or whether the order has reached the payment workflow. |
+| Status differs | A verified partner `PAID` status is authoritative for settlement of a local `PENDING` order. Local `PAID` and `CANCELLED` are preserved pending manual review because changing a terminal status can require refund, fulfillment, or inventory action. For other differences, keep the local lifecycle status and investigate. |
+
+The outbound `PartnerClient` accepts a base URL such as `PARTNER_BASE_URL` and calls `GET /orders`. It validates the list with the same Zod schema used for the fixture.
+
+## Docker
+
+Apply the migration using the local setup above, then build and run the API image on the Compose network. The example assumes the default Compose project name, `orders-service`.
+
+```sh
+docker build -t orders-service .
+docker run --rm --network orders-service_default -p 3000:3000 --env-file .env \
+  -e DATABASE_URL=postgresql://orders:orders@db:5432/orders orders-service
+```
+
+For other deployments, set `DATABASE_URL` to the PostgreSQL address reachable from the container and apply committed migrations with `npx prisma migrate deploy` from the workspace before starting the API.
+
+## Design decisions
+
+- Orders aggregate repeated product IDs and acquire row locks in sorted product ID order. Each stock decrement is a conditional update with an affected-row check. Stock, versions, order items, and order status commit together.
+- A transaction-scoped PostgreSQL advisory lock serializes use of each idempotency key. The SHA-256 hash covers the validated JSON body, preserving item array order. Successful responses and business conflicts are replayed with their original status and body. A savepoint rolls back inventory and order changes before storing a conflict response.
+- Payment signatures cover the raw HTTP body. A unique event ID makes repeated delivery safe. A second transaction-scoped lock serializes order creation and successful payment handling for the same order ID. An early event stays pending until creation marks it processed and sets the order to `PAID` in the same transaction. Payment success changes `PENDING` orders and preserves terminal statuses.
+- Each outbound attempt has a timeout covering the headers and body. Network failures, timeouts, and 5xx responses use bounded exponential backoff with jitter. Invalid JSON, schema violations, and 4xx responses fail immediately.
