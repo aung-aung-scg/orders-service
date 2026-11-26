@@ -10,12 +10,12 @@ export default async function OrdersPage() {
   const productNames = new Map(products.map(({ id, name }) => [id, name]));
 
   return (
-    <>
-      <h1>Orders</h1>
+    <section className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
+      <h1 className="text-3xl font-semibold tracking-tight">Orders</h1>
       <OrderForm products={products.map(({ id, name, stock }) => ({ id, name, stock }))} />
       {orders.length ? (
-        <div className="table-scroll">
-          <table>
+        <div className="overflow-x-auto rounded-2xl border bg-card shadow-sm">
+          <table className="w-full text-left text-sm [&_td]:border-t [&_td]:p-3 [&_th]:bg-muted [&_th]:p-3">
             <thead><tr><th>Order ID</th><th>Status</th><th>Items</th></tr></thead>
             <tbody>
               {orders.map(order => (
@@ -35,6 +35,6 @@ export default async function OrdersPage() {
           </table>
         </div>
       ) : <p>No orders yet.</p>}
-    </>
+    </section>
   );
 }

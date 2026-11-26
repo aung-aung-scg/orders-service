@@ -9,12 +9,12 @@ export default async function ProductsPage() {
   const products = await getProducts();
 
   return (
-    <>
-      <h1>Products</h1>
+    <section className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
+      <h1 className="text-3xl font-semibold tracking-tight">Products</h1>
       <ProductForm />
       {products.length ? (
-        <div className="table-scroll">
-          <table>
+        <div className="overflow-x-auto rounded-2xl border bg-card shadow-sm">
+          <table className="w-full text-left text-sm [&_td]:border-t [&_td]:p-3 [&_th]:bg-muted [&_th]:p-3">
             <thead><tr><th>Name</th><th>Stock</th><th>Version</th><th>Created at (UTC)</th></tr></thead>
             <tbody>
               {products.map(product => (
@@ -29,6 +29,6 @@ export default async function ProductsPage() {
           </table>
         </div>
       ) : <p>No products yet.</p>}
-    </>
+    </section>
   );
 }

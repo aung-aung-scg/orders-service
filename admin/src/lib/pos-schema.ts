@@ -26,7 +26,8 @@ export const tickets = z.array(z.object({
 export type Ticket = z.infer<typeof tickets>[number];
 export type CustomerTable = z.infer<typeof customerTable>;
 
+const thbFormatter = new Intl.NumberFormat("en-TH", { style: "currency", currency: "THB" });
+
 export function baht(satang: number) {
-  const digits = String(Math.abs(satang)).padStart(3, "0");
-  return `${satang < 0 ? "-" : ""}฿${digits.slice(0, -2)}.${digits.slice(-2)}`;
+  return thbFormatter.format(satang / 100);
 }
