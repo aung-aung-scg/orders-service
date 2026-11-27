@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: orders
       POSTGRES_DB: orders
     ports:
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "orders", "-d", "orders"]
       interval: 2s

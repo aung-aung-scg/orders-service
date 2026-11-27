@@ -4,20 +4,21 @@ import { buildApp } from '../src/app.js'
 import { createDb } from '../src/lib/db.js'
 
 const db = createDb()
-const app = buildApp({ db })
+const demoKey = randomUUID()
+const app = buildApp({ db, stockDemo: true, kitchenApiKey: demoKey })
 afterAll(async () => {
   await app.close()
   await db.$disconnect()
 })
 
 test('only ten of fifty parallel orders can buy the last ten units', async () => {
-  const created = await app.inject({ method: 'POST', url: '/products', payload: { name: 'Concurrent product', stock: 10 } })
+  const created = await app.inject({ method: 'POST', url: '/products', headers: { 'x-kitchen-api-key': demoKey }, payload: { name: 'Concurrent product', stock: 10 } })
   expect(created.statusCode).toBe(201)
   const { id } = created.json()
   const responses = await Promise.all(Array.from({ length: 50 }, () => app.inject({
     method: 'POST',
     url: '/orders',
-    headers: { 'idempotency-key': randomUUID() },
+    headers: { 'x-kitchen-api-key': demoKey, 'idempotency-key': randomUUID() },
     payload: { items: [{ productId: id, quantity: 1 }] },
   })))
 
@@ -34,7 +35,7 @@ test('an unavailable item rolls back a prior stock decrement', async () => {
   const response = await app.inject({
     method: 'POST',
     url: '/orders',
-    headers: { 'idempotency-key': randomUUID() },
+    headers: { 'x-kitchen-api-key': demoKey, 'idempotency-key': randomUUID() },
     payload: { items: [{ productId: first.id, quantity: 1 }, { productId: last.id, quantity: 1 }] },
   })
   expect(response.statusCode).toBe(409)

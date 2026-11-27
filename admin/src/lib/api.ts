@@ -60,19 +60,30 @@ export async function request<T>(path: string, schema: z.ZodType<T>, options: Re
 
 export const productsTag = "products";
 
+export function stockDemoEnabled() {
+  return process.env.STOCK_DEMO_ENABLED === "true";
+}
+
+function demoHeaders() {
+  if (!stockDemoEnabled()) throw new BackendError(404, "NOT_FOUND", "Stock demo is disabled");
+  const key = process.env.KITCHEN_API_KEY;
+  if (!key) throw new Error("KITCHEN_API_KEY is required");
+  return { "x-kitchen-api-key": key };
+}
+
 export function getProducts() {
-  return request("/products", z.array(product), { next: { revalidate: 30, tags: [productsTag] } });
+  return request("/products", z.array(product), { headers: demoHeaders(), next: { revalidate: 30, tags: [productsTag] } });
 }
 
 export function getOrders() {
-  return request("/orders", z.array(order), { cache: "no-store" });
+  return request("/orders", z.array(order), { cache: "no-store", headers: demoHeaders() });
 }
 
 export function createProduct(input: { name: string; stock: number }) {
   return request("/products", product, {
     method: "POST",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...demoHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
 }
@@ -81,7 +92,7 @@ export function createOrder(input: { items: { productId: string; quantity: numbe
   return request("/orders", order, {
     method: "POST",
     cache: "no-store",
-    headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+    headers: { ...demoHeaders(), "Content-Type": "application/json", "Idempotency-Key": key },
     body: JSON.stringify(input),
   });
 }

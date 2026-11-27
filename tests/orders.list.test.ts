@@ -4,7 +4,8 @@ import { buildApp } from '../src/app.js'
 import { createDb } from '../src/lib/db.js'
 
 const db = createDb()
-const app = buildApp({ db })
+const demoKey = randomUUID()
+const app = buildApp({ db, stockDemo: true, kitchenApiKey: demoKey })
 afterAll(async () => {
   await app.close()
   await db.$disconnect()
@@ -15,13 +16,13 @@ test('lists orders with their status and items', async () => {
   const created = await app.inject({
     method: 'POST',
     url: '/orders',
-    headers: { 'idempotency-key': randomUUID() },
+    headers: { 'x-kitchen-api-key': demoKey, 'idempotency-key': randomUUID() },
     payload: { items: [{ productId: product.id, quantity: 2 }] },
   })
   expect(created.statusCode).toBe(201)
   const { id, createdAt, items } = created.json()
 
-  const response = await app.inject({ method: 'GET', url: '/orders' })
+  const response = await app.inject({ method: 'GET', url: '/orders', headers: { 'x-kitchen-api-key': demoKey } })
   expect(response.statusCode).toBe(200)
   expect(response.json().find((order: { id: string }) => order.id === id)).toEqual({
     id,

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run tests/auth.test.ts"
+    "test": "vitest run --dir tests"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.5",

@@ -1,30 +1,52 @@
 import { randomUUID } from "node:crypto";
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
-import { Check, ChevronRight, ShoppingBag } from "lucide-react";
+import { ClipboardList, ShoppingBag, Utensils } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BackendError } from "@/lib/api";
-import { getCustomerTable } from "@/lib/pos-api";
+import { customerPath, getCustomerTable } from "@/lib/pos-api";
 import { baht } from "@/lib/pos-schema";
 import { ThemeToggle } from "../../theme-toggle";
-import { AddItem, CartQuantity, OrderUpdates, PlaceOrder } from "./cart-controls";
-
-const steps = [
-  ["SUBMITTED", "Received"], ["PREPARING", "Preparing"], ["READY", "Ready"], ["SERVED", "Served"],
-] as const;
+import { OrderHistory } from "../../order-history";
+import { AddItem, CartQuantity, JoinTable, OrderUpdates, PlaceOrder } from "./cart-controls";
 
 export default async function CustomerPage({ params, searchParams }: PageProps<"/t/[token]">) {
   const { token } = await params;
-  const query = z.uuid().safeParse((await searchParams).orderId);
-  const { tableNumber, menu, order, ticket } = await getCustomerTable(token, query.data).catch(error => {
+  const paramsQuery = await searchParams;
+  const query = z.uuid().safeParse(paramsQuery.orderId);
+  const showingOrders = paramsQuery.view === "orders" || (paramsQuery.view === undefined && query.success);
+  const { tableNumber, sessionId, menu, order, submittedOrders, sessionTotalMinor, sessionEnded } = await getCustomerTable(token).catch(error => {
     if (error instanceof BackendError && error.status === 404) notFound();
     throw error;
   });
 
+  if (!sessionId || (paramsQuery.session !== undefined && paramsQuery.session !== sessionId)) {
+    const ended = sessionEnded || typeof paramsQuery.session === "string";
+    return (
+      <div data-customer className="mx-auto max-w-md px-4 py-10">
+        <Card className="gap-4 rounded-2xl p-5">
+          <h1 className="text-2xl font-semibold">Join Table {tableNumber}</h1>
+          {ended && <p role="status" className="font-medium">This dining session has ended.</p>}
+          <p className="text-sm text-muted-foreground">Ask staff for the current join code. Everyone using that code shares one cart.</p>
+          <JoinTable token={token} />
+        </Card>
+      </div>
+    );
+  }
+  if (paramsQuery.session === undefined) {
+    const search = new URLSearchParams({ session: sessionId });
+    if (showingOrders) search.set("view", "orders");
+    if (query.data) search.set("orderId", query.data);
+    redirect(customerPath(token) + "?" + search);
+  }
+
   const count = order?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
-  const currentStep = steps.findIndex(([status]) => status === ticket?.status);
+  const menuPath = customerPath(token) + "?" + new URLSearchParams({ session: sessionId });
+  const ordersPath = menuPath + "&view=orders";
 
   return (
     <div data-customer className="pb-28">
@@ -35,25 +57,17 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
         </div>
       </header>
       <div className="mx-auto max-w-6xl space-y-7 px-4 py-6 sm:px-8 sm:py-9">
-        <OrderUpdates status={ticket?.status} />
-        {ticket && (
-          <Card className="gap-4 rounded-2xl px-4 py-4 shadow-sm sm:px-6">
-            <h2 className="text-lg font-semibold">Order status</h2>
-            {ticket.status === "CANCELLED" ? <p role="status" className="text-destructive">Cancelled</p> : (
-              <ol aria-label="Order progress" className="grid grid-cols-4 gap-1">
-                {steps.map(([status, label], index) => (
-                  <li key={status} aria-current={index === currentStep ? "step" : undefined} className={`grid justify-items-center gap-2 text-xs sm:text-sm ${index <= currentStep ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-                    <span aria-hidden="true" className={`grid size-8 place-items-center rounded-full ${index <= currentStep ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-                      {index < currentStep ? <Check className="size-4" /> : index + 1}
-                    </span>
-                    {label}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Card>
-        )}
-        <section aria-labelledby="menu-title" className="space-y-4">
+        <OrderUpdates orders={submittedOrders.map(({ id, status }) => ({ id, status }))} />
+        {showingOrders ? (
+          <section aria-labelledby="my-orders-title" className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="my-orders-title" className="text-3xl font-semibold tracking-tight">My Orders</h2>
+              <p className="rounded-xl border bg-card px-3 py-2 text-sm">Session total <strong className="tabular-nums">{baht(sessionTotalMinor)}</strong></p>
+            </div>
+            <OrderHistory orders={submittedOrders} expandedOrderId={query.data} />
+          </section>
+        ) : (
+          <section aria-labelledby="menu-title" className="space-y-4">
           <h2 id="menu-title" className="text-3xl font-semibold tracking-tight">Menu</h2>
           {menu.length ? (
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -64,23 +78,33 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                       <h3 className="min-w-0 wrap-break-word text-base font-semibold">{item.name}</h3>
                       <p className="shrink-0 font-semibold text-accent-foreground">{baht(item.priceMinor)}</p>
                     </div>
-                    <AddItem token={token} menuItemId={item.id} />
+                    <AddItem token={token} sessionId={sessionId} menuItemId={item.id} />
                   </Card>
                 </li>
               ))}
             </ul>
           ) : <p className="rounded-2xl border bg-card p-6 text-muted-foreground">No menu items are available.</p>}
-        </section>
+          </section>
+        )}
       </div>
       <Sheet key={order?.id ?? "empty"}>
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg backdrop-blur">
-          <SheetTrigger asChild>
-            <Button className="mx-auto flex h-12 w-full max-w-lg justify-between px-4 text-sm">
-              <span className="flex items-center gap-2"><ShoppingBag />{`Cart · ${count} ${count === 1 ? "item" : "items"}`}</span>
-              <span className="flex items-center gap-2">{baht(order?.totalMinor ?? 0)} <ChevronRight /></span>
+        <nav aria-label="Table ordering" className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg backdrop-blur">
+          <div className="mx-auto grid max-w-lg grid-cols-3 gap-1 sm:gap-2">
+            <Button asChild variant={showingOrders ? "ghost" : "secondary"} className="h-12 min-w-0 gap-1 px-1.5 text-xs sm:text-sm">
+              <Link href={menuPath} prefetch={false} aria-current={showingOrders ? undefined : "page"}><Utensils /> Menu</Link>
             </Button>
-          </SheetTrigger>
-        </div>
+            <SheetTrigger asChild>
+              <Button aria-label={`Cart · ${count} ${count === 1 ? "item" : "items"}`} variant="ghost" className="h-12 min-w-0 gap-1 px-1.5 text-xs sm:text-sm">
+                <ShoppingBag /> Cart <Badge variant="outline">{count}</Badge>
+              </Button>
+            </SheetTrigger>
+            <Button asChild variant={showingOrders ? "secondary" : "ghost"} className="h-12 min-w-0 gap-1 px-1.5 text-xs sm:text-sm">
+              <Link href={ordersPath} prefetch={false} aria-current={showingOrders ? "page" : undefined}>
+                <ClipboardList className="hidden sm:block" /> My Orders <Badge variant="outline">{submittedOrders.length}</Badge>
+              </Link>
+            </Button>
+          </div>
+        </nav>
         <SheetContent side="bottom" className="mx-auto flex max-h-[90dvh] max-w-xl gap-0 overflow-hidden rounded-t-2xl">
           <SheetHeader className="border-b px-5 py-4">
             <SheetTitle>Your cart</SheetTitle>
@@ -96,12 +120,12 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                       <span className="shrink-0 text-muted-foreground">{baht(item.unitPriceMinor)} each</span>
                     </div>
                     {item.note && <p className="wrap-break-word text-sm text-muted-foreground">{item.note}</p>}
-                    <CartQuantity token={token} itemId={item.id} quantity={item.quantity} />
+                    <CartQuantity token={token} sessionId={sessionId} itemId={item.id} quantity={item.quantity} />
                   </li>
                 ))}
               </ul>
               <div className="border-t px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                <PlaceOrder key={order.id} renderKey={randomUUID()} token={token} />
+                <PlaceOrder key={`${order.id}:${order.version}`} renderKey={randomUUID()} token={token} sessionId={sessionId} cartId={order.id} version={order.version} />
               </div>
             </>
           ) : <p className="px-5 py-10 text-center text-muted-foreground">Your cart is empty.</p>}

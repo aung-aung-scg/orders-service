@@ -6,7 +6,7 @@ export async function proxy(request: NextRequest) {
   const api = pathname.startsWith("/api/") ||
     pathname === "/kitchen/orders" || pathname === "/kitchen/stream" ||
     /^\/tables\/[^/]+\/qr$/.test(pathname);
-  const kitchen = /^\/(?:api\/)?kitchen(?:\/|$)/.test(pathname);
+  const kitchen = /^\/(?:api\/)?kitchen(?:\/|$)/.test(pathname) || pathname === "/reservations" || /^\/table-sessions(?:\/|$)/.test(pathname);
   const session = await verifySession(request.cookies.get(sessionCookie)?.value);
   if (!session) {
     if (api) {
@@ -30,5 +30,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/kitchen/:path*", "/tables/:path*", "/api/kitchen/:path*", "/api/tables/:path*"],
+  matcher: ["/kitchen/:path*", "/tables/:path*", "/api/kitchen/:path*", "/api/tables/:path*", "/reservations", "/table-sessions/:path*"],
 };

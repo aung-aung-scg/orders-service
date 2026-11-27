@@ -1,4 +1,5 @@
 import { LoginForm } from "./login-form";
+import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ThemeToggle } from "../theme-toggle";
 
@@ -13,6 +14,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </CardHeader>
         <CardContent>
           <LoginForm next={typeof next === "string" ? next.slice(0, 2048) : ""} />
+          <Link href="/book" prefetch={false} className="mt-4 block text-center text-sm font-medium text-primary underline-offset-4 hover:underline">Book a table</Link>
         </CardContent>
       </Card>
     </div>

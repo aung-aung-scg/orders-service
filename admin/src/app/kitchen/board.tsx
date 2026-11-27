@@ -76,7 +76,8 @@ export function KitchenBoard({ initialTickets }: { initialTickets: Ticket[] }) {
 
   useEffect(() => {
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
-    const stream = new EventSource("/kitchen/stream");
+    let stream: EventSource | undefined;
+    let reconnectTimer: number | undefined;
     let pollTimer: number | undefined;
     let pendingPoll: AbortController | undefined;
 
@@ -127,12 +128,24 @@ export function KitchenBoard({ initialTickets }: { initialTickets: Ticket[] }) {
         void poll();
         pollTimer = window.setInterval(poll, 5000);
       }
+      if (stream?.readyState === EventSource.CLOSED && reconnectTimer === undefined) {
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = undefined;
+          connect();
+        }, 5000);
+      }
     };
-    stream.addEventListener("snapshot", receive);
-    stream.addEventListener("tickets", receive);
-    stream.onerror = fallback;
+    function connect() {
+      stream?.close();
+      stream = new EventSource("/kitchen/stream");
+      stream.addEventListener("snapshot", receive);
+      stream.addEventListener("tickets", receive);
+      stream.onerror = fallback;
+    }
+    connect();
     return () => {
-      stream.close();
+      stream?.close();
+      window.clearTimeout(reconnectTimer);
       stopPolling();
       window.clearInterval(clock);
       if (audio.current) void audio.current.close().catch(() => {});
@@ -171,6 +184,7 @@ export function KitchenBoard({ initialTickets }: { initialTickets: Ticket[] }) {
                       <h3 className="min-w-0 wrap-break-word text-2xl font-semibold tracking-tight">Table {ticket.table.number}</h3>
                       <Age now={now} submittedAt={ticket.submittedAt} />
                     </div>
+                    {ticket.previousSeating && <Badge variant="outline">Previous seating</Badge>}
                     <ul className="divide-y border-y">
                       {ticket.items.map(item => (
                         <li key={item.id} className="flex items-start gap-2 py-3 text-sm">

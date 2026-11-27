@@ -1,10 +1,12 @@
 import { connection } from "next/server";
+import { notFound } from "next/navigation";
 import { adminRoles, requireRole } from "@/lib/auth";
-import { getOrders, getProducts } from "@/lib/api";
+import { getOrders, getProducts, stockDemoEnabled } from "@/lib/api";
 import { OrderForm } from "../forms";
 
 export default async function OrdersPage() {
   await requireRole(adminRoles, { next: "/orders" });
+  if (!stockDemoEnabled()) notFound();
   await connection();
   const [orders, products] = await Promise.all([getOrders(), getProducts()]);
   const productNames = new Map(products.map(({ id, name }) => [id, name]));

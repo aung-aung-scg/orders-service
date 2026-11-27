@@ -4,7 +4,8 @@ import { buildApp } from '../src/app.js'
 import { createDb } from '../src/lib/db.js'
 
 const db = createDb()
-const app = buildApp({ db })
+const demoKey = randomUUID()
+const app = buildApp({ db, stockDemo: true, kitchenApiKey: demoKey })
 afterAll(async () => {
   await app.close()
   await db.$disconnect()
@@ -16,7 +17,7 @@ test('parallel retries replay one response and changed input is rejected', async
   const submit = (quantity: number) => app.inject({
     method: 'POST',
     url: '/orders',
-    headers: { 'idempotency-key': key },
+    headers: { 'x-kitchen-api-key': demoKey, 'idempotency-key': key },
     payload: { items: [{ productId: product.id, quantity }] },
   })
 
@@ -35,7 +36,7 @@ test('an insufficient-stock response is replayed after stock changes', async () 
   const submit = () => app.inject({
     method: 'POST',
     url: '/orders',
-    headers: { 'idempotency-key': key },
+    headers: { 'x-kitchen-api-key': demoKey, 'idempotency-key': key },
     payload: { items: [{ productId: product.id, quantity: 1 }] },
   })
 

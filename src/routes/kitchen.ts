@@ -15,16 +15,18 @@ const transitions: Record<TableOrderStatus, TableOrderStatus[]> = {
 }
 const statusBody = z.object({ status: z.enum(['OPEN', 'SUBMITTED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED']) })
 
-export function activeTickets(db: PrismaClient) {
-  return db.tableOrder.findMany({
+export async function activeTickets(db: PrismaClient) {
+  const tickets = await db.tableOrder.findMany({
     where: { status: { in: ['SUBMITTED', 'PREPARING', 'READY'] } },
     orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
     select: {
       id: true, status: true, submittedAt: true, totalMinor: true,
       table: { select: { number: true } },
+      session: { select: { endedAt: true } },
       items: { orderBy: { id: 'asc' } },
     },
   })
+  return tickets.map(({ session, ...ticket }) => ({ ...ticket, previousSeating: !session || session.endedAt !== null }))
 }
 
 export function registerKitchen(app: FastifyInstance, db: PrismaClient, key: string | undefined, events: EventEmitter) {

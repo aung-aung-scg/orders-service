@@ -12,8 +12,8 @@ try {
   await db.$transaction([
     ...Array.from({ length: 5 }, (_, index) => db.diningTable.upsert({
       where: { number: index + 1 },
-      create: { number: index + 1, qrToken: randomBytes(24).toString('base64url') },
-      update: {},
+      create: { number: index + 1, capacity: [2, 2, 4, 4, 6][index], qrToken: randomBytes(24).toString('base64url') },
+      update: { capacity: [2, 2, 4, 4, 6][index] },
     })),
     ...menu.map(([name, priceMinor], index) => db.menuItem.upsert({
       where: { id: `pos-seed-${index + 1}` },
