@@ -1,22 +1,35 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { MenuItem } from "@/lib/menu-api";
+import { menuImageMaxBytes, menuImagePath } from "@/lib/menu-image";
 import { submitMenuItem, toggleMenuItem, type MenuState } from "./actions";
 
 function ItemFields({ item, close }: { item?: MenuItem; close: () => void }) {
   const [name, setName] = useState(item?.name ?? "");
   const digits = item ? String(item.priceMinor).padStart(3, "0") : "";
   const [price, setPrice] = useState(digits ? digits.slice(0, -2) + "." + digits.slice(-2) : "");
+  const [file, setFile] = useState<File>();
+  const [preview, setPreview] = useState<string>();
+  const [removed, setRemoved] = useState(false);
+  const [fileError, setFileError] = useState<string>();
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
   const [state, action, pending] = useActionState(async (previous: MenuState, form: FormData) => {
+    if (file) form.set("image", file);
+    if (removed) form.set("removeImage", "yes");
     const result = await submitMenuItem(item?.id, previous, form);
     if (result.saved) close();
     return result;
   }, {});
+  const image = file ? preview : removed ? undefined : menuImagePath(item?.imageKey);
   return (
     <form action={action} noValidate className="grid gap-4">
       <label className="grid gap-1.5 text-sm font-medium">
@@ -32,6 +45,37 @@ function ItemFields({ item, close }: { item?: MenuItem; close: () => void }) {
           aria-describedby={state.price ? "menu-price-error" : undefined} />
         {state.price && <span id="menu-price-error" className="text-destructive" role="alert">{state.price}</span>}
       </label>
+      <label className="grid gap-1.5 text-sm font-medium">
+        Image (optional, up to 2 MB)
+        <Input ref={input} type="file" accept="image/jpeg,image/png,image/webp" disabled={pending}
+          aria-describedby={fileError || state.image ? "menu-image-error" : undefined}
+          onChange={event => {
+            const selected = event.target.files?.[0];
+            if (!selected) return;
+            setPreview(undefined);
+            if (selected.size > menuImageMaxBytes) {
+              setFile(undefined);
+              setFileError("Choose an image no larger than 2 MB.");
+              event.target.value = "";
+              return;
+            }
+            setFile(selected);
+            setPreview(URL.createObjectURL(selected));
+            setRemoved(false);
+            setFileError(undefined);
+          }} />
+      </label>
+      {(fileError || state.image) && <p id="menu-image-error" className="text-sm text-destructive" role="alert">{fileError || state.image}</p>}
+      {image && <div className="flex items-center gap-3">
+        <Image src={image} alt="Menu image preview" width={80} height={80} unoptimized className="size-20 rounded-lg object-cover" />
+        <Button type="button" variant="outline" disabled={pending} onClick={() => {
+          setFile(undefined);
+          setPreview(undefined);
+          setRemoved(Boolean(item?.imageKey));
+          setFileError(undefined);
+          if (input.current) input.current.value = "";
+        }}>Remove image</Button>
+      </div>}
       {state.error && <p className="text-sm text-destructive" role="alert">{state.error}</p>}
       <Button type="submit" disabled={pending}>{pending ? "Saving…" : item ? "Save changes" : "Add item"}</Button>
     </form>

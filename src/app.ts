@@ -7,6 +7,8 @@ import { HttpError } from './lib/errors.js'
 import { registerKitchen } from './routes/kitchen.js'
 import { registerStaffAuth } from './routes/staff-auth.js'
 import { registerStaffMenu } from './routes/staff-menu.js'
+import { registerPublicMenuImages, registerStaffMenuImages } from './routes/menu-images.js'
+import { localImageStorage, type ImageStorage } from './lib/image-storage.js'
 import { registerStaffReservations } from './routes/staff-reservations.js'
 import { registerTableOrders } from './routes/table-orders.js'
 import { registerTables } from './routes/tables.js'
@@ -17,6 +19,7 @@ import { readEnv, readPosEnv } from './lib/env.js'
 
 export function buildApp(options: {
   db?: ReturnType<typeof createDb>; logger?: boolean; webhookSecret?: string; kitchenApiKey?: string; stockDemo?: boolean;
+  imageStorage?: ImageStorage;
 } = {}) {
   const secret = options.webhookSecret ?? readEnv().WEBHOOK_SECRET
   const { KITCHEN_API_KEY, PUBLIC_BASE_URL } = readPosEnv()
@@ -59,10 +62,13 @@ export function buildApp(options: {
     app.register(async scope => registerStockDemo(scope, db, options.kitchenApiKey ?? KITCHEN_API_KEY))
   }
   registerTableOrders(app, db, kitchenEvents)
+  const images = options.imageStorage ?? localImageStorage()
+  registerPublicMenuImages(app, images)
   app.register(async scope => {
     registerKitchen(scope, db, options.kitchenApiKey ?? KITCHEN_API_KEY, kitchenEvents)
     registerStaffAuth(scope, db)
     registerStaffMenu(scope, db)
+    scope.register(async imageScope => registerStaffMenuImages(imageScope, db, images))
     registerStaffReservations(scope, db)
     registerTables(scope, db, PUBLIC_BASE_URL, kitchenEvents)
   })

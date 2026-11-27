@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import Image from "next/image";
+import { menuImagePath } from "@/lib/menu-image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
@@ -71,17 +73,25 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
           <h2 id="menu-title" className="text-3xl font-semibold tracking-tight">Menu</h2>
           {menu.length ? (
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {menu.map(item => (
+              {menu.map(item => {
+                const image = menuImagePath(item.imageKey);
+                return (
                 <li key={item.id}>
                   <Card className="h-full gap-5 rounded-2xl px-4 py-4 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="min-w-0 wrap-break-word text-base font-semibold">{item.name}</h3>
                       <p className="shrink-0 font-semibold text-accent-foreground">{baht(item.priceMinor)}</p>
                     </div>
+                    <div className="relative aspect-4/3 overflow-hidden rounded-xl bg-muted">
+                      {image
+                        ? <Image src={image} alt={item.name} fill loading="lazy" unoptimized className="object-cover" />
+                        : <span className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">No image</span>}
+                    </div>
                     <AddItem token={token} sessionId={sessionId} menuItemId={item.id} />
                   </Card>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : <p className="rounded-2xl border bg-card p-6 text-muted-foreground">No menu items are available.</p>}
           </section>
