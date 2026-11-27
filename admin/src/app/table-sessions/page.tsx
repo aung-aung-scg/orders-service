@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { WorkspaceEmpty, WorkspaceLoadError } from "@/app/restaurant-admin/workspace-state";
 import { kitchenRoles, requireRole } from "@/lib/auth";
 import { listDiningSessions } from "@/lib/pos-api";
 import { ResetForm } from "./reset-form";
@@ -9,10 +10,10 @@ export default async function TableSessionsPage() {
   const staff = await requireRole(kitchenRoles, { next: "/table-sessions" });
   const tables = await listDiningSessions().catch(() => null);
   return (
-    <section className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-8">
-      <h1 className="text-3xl font-semibold tracking-tight">Table sessions</h1>
+    <section className="space-y-6">
+      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Table sessions</h1>
       <p className="text-sm text-muted-foreground">Give the current join code to guests seated at the table.</p>
-      {tables === null ? <p role="alert">Couldn’t load table sessions.</p> : !tables.length ? <p>No active tables.</p> :
+      {tables === null ? <WorkspaceLoadError message="Couldn’t load table sessions." /> : !tables.length ? <WorkspaceEmpty title="No active tables" /> :
         <ul className="grid gap-3 sm:grid-cols-2">
           {tables.map(table => (
             <li key={table.id}>

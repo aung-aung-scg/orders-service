@@ -8,7 +8,7 @@ export default async function KitchenPage() {
   await connection();
   const tickets = await getTickets();
   return (
-    <div data-kitchen className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-9">
+    <div data-kitchen>
       <KitchenBoard initialTickets={tickets} />
     </div>
   );

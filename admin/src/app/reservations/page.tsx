@@ -7,6 +7,7 @@ import { kitchenRoles, requireRole } from "@/lib/auth";
 import { getStaffBookings } from "@/lib/booking-api";
 import { bookingTime, bookingToday } from "@/lib/booking-display";
 import { publicRestaurant } from "@/lib/restaurant-api";
+import { WorkspaceEmpty, WorkspaceLoadError } from "@/app/restaurant-admin/workspace-state";
 import { StatusButton } from "./status-button";
 
 export default async function ReservationsPage({ searchParams }: PageProps<"/reservations">) {
@@ -19,7 +20,7 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
   const reservations = await getStaffBookings(date).catch(() => null);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-8">
+    <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Reservations</h1>
@@ -30,8 +31,8 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
           <Button type="submit" variant="outline">View day</Button>
         </form>
       </header>
-      {!reservations ? <p role="alert" className="text-destructive">Couldn’t load reservations. Try again.</p> :
-        !reservations.length ? <p className="rounded-2xl border bg-card p-5 text-muted-foreground">No reservations for this day.</p> : (
+      {!reservations ? <WorkspaceLoadError message="Couldn’t load reservations." /> :
+        !reservations.length ? <WorkspaceEmpty title="No reservations for this day" /> : (
           <ul className="space-y-3">
             {reservations.map(booking => (
               <li key={booking.id}>
