@@ -2,6 +2,7 @@ import Image from "next/image";
 import { connection } from "next/server";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { WorkspaceEmpty } from "@/app/restaurant-admin/workspace-state";
 import { adminRoles, requireRole } from "@/lib/auth";
 import { listTables } from "@/lib/pos-api";
 import { PrintButton } from "./print-button";
@@ -11,7 +12,7 @@ export default async function TablesPage() {
   await connection();
   const tables = await listTables();
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-9 print:max-w-none print:p-0">
+    <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Table QR codes</h1>
         {tables.length > 0 && <PrintButton />}
@@ -30,7 +31,7 @@ export default async function TablesPage() {
             </li>
           ))}
         </ul>
-      ) : <p className="rounded-2xl border bg-card p-6 text-muted-foreground">No tables yet.</p>}
+      ) : <WorkspaceEmpty title="No tables yet" />}
     </div>
   );
 }

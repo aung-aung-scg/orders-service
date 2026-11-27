@@ -87,11 +87,11 @@ export function MenuEditor({ item }: { item?: MenuItem }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant={item ? "outline" : "default"} aria-label={item ? "Edit " + item.name : undefined}>
+        <Button variant={item ? "outline" : "default"} size={item ? "sm" : "default"} aria-label={item ? "Edit " + item.name : undefined}>
           {item ? <><Pencil /> Edit</> : <><Plus /> Add item</>}
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item ? "Edit menu item" : "Add menu item"}</DialogTitle>
           <DialogDescription>Enter a name and a price in Thai baht.</DialogDescription>

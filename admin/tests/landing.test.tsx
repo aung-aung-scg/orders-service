@@ -11,7 +11,7 @@ vi.mock("@/components/ui/card", () => ({ Card: ({ children }: { children: ReactN
 
 test("the public landing offers separate booking and staff paths", () => {
   const html = renderToStaticMarkup(<Home />);
-  expect(html).toContain('<a href="/book">Book a table</a>');
-  expect(html).toContain('<a href="/login">Staff sign in</a>');
+  expect(html).toContain('<a href="/r/default/book">Book a table</a>');
+  expect(html).toContain('<a href="/r/default/login">Staff sign in</a>');
   expect(html).not.toContain('href="/products"');
 });

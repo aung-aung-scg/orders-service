@@ -16,7 +16,7 @@ export default async function StaffOrderHistory({ params }: PageProps<"/table-se
     throw error;
   });
   return (
-    <section className="mx-auto max-w-3xl space-y-4 px-4 py-8 sm:px-8">
+    <section className="max-w-3xl space-y-4">
       <Button asChild variant="outline"><Link href="/table-sessions">Back to table sessions</Link></Button>
       <h1 className="text-3xl font-semibold tracking-tight">Table {history.number} order history</h1>
       <p className="text-sm text-muted-foreground">Submitted orders from current and previous seatings.</p>

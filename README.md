@@ -53,6 +53,16 @@ To try the stock and idempotency demo, set `STOCK_DEMO_ENABLED=true` in both env
 - No payments, and no email or LINE confirmations.
 - Menu images are stored on local disk. In containers that needs a mounted volume or S3.
 
+## Restaurants
+
+- Apply migrations before starting the new app. Existing rows move to `default` with IDs, printed QR codes, and booking links preserved. Staff sign in again after upgrade.
+- Guest booking, recovery, and staff sign-in use `/r/<slug>/...`. Printed QR URLs stay at `/t/<token>`.
+- Keep backend ingress private. Staff API calls require the kitchen API key and `X-Restaurant-Id`. The admin derives the tenant header from the signed staff session after login.
+- Booking settings come from the restaurant row. The default restaurant seed uses `BOOKING_*` values. Seed with your existing settings if they differ from the migration defaults.
+- Set a distinct `PLATFORM_API_KEY` in backend `.env` and admin `.env.local`. Set `SUPER_ADMIN_PASSWORD` on the backend and run `npm run db:seed:super`, then sign in as `superadmin` at `/platform/login`.
+- Copy new or reset staff credentials from the one-time panel and share them securely. Staff must choose a new password on first sign-in. Suspending a restaurant blocks booking and staff access until reactivated.
+- Set `PUBLIC_BASE_URL` to the public HTTPS origin in admin `.env.local` before building for correct metadata, sitemap, and robots URLs.
+
 ## More
 
 - [Full reference: endpoints, env vars, reconciliation rules](docs/reference.md)

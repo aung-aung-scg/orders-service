@@ -1,4 +1,5 @@
 import "server-only";
+import { getSession } from "./auth";
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { z } from "zod";
@@ -66,56 +67,62 @@ export async function submitTableOrder(token: string, sessionId: string, key: st
   });
 }
 
-export function kitchenHeaders() {
+export function kitchenApiKeyHeaders() {
   const key = process.env.KITCHEN_API_KEY;
   if (!key) throw new Error("KITCHEN_API_KEY is required");
   return { "x-kitchen-api-key": key };
 }
 
-export function getTickets(signal?: AbortSignal) {
-  return request("/kitchen/orders", tickets, { cache: "no-store", headers: kitchenHeaders(), signal });
+export async function kitchenHeaders() {
+  const session = await getSession();
+  if (!session || session.mustChangePassword) throw new Error("Staff session required");
+  return { ...kitchenApiKeyHeaders(), "X-Restaurant-Id": session.restaurantId };
 }
 
-export function setTicketStatus(id: string, status: string) {
+export async function getTickets(signal?: AbortSignal) {
+  return request("/kitchen/orders", tickets, { cache: "no-store", headers: await kitchenHeaders(), signal });
+}
+
+export async function setTicketStatus(id: string, status: string) {
   return request("/kitchen/orders/" + encodeURIComponent(id) + "/status", ticketStatus, {
     method: "PATCH",
-    headers: { ...kitchenHeaders(), "Content-Type": "application/json" },
+    headers: { ...await kitchenHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   });
 }
 
-export function listTables() {
-  return request("/tables", tableList, { cache: "no-store", headers: kitchenHeaders() });
+export async function listTables() {
+  return request("/tables", tableList, { cache: "no-store", headers: await kitchenHeaders() });
 }
 
-export function getTableQr(id: string, signal: AbortSignal) {
-  return backendFetch("/tables/" + encodeURIComponent(id) + "/qr", { cache: "no-store", headers: kitchenHeaders(), signal });
+export async function getTableQr(id: string, signal: AbortSignal) {
+  return backendFetch("/tables/" + encodeURIComponent(id) + "/qr", { cache: "no-store", headers: await kitchenHeaders(), signal });
 }
 
-export function kitchenStream(signal: AbortSignal) {
-  return backendFetch("/kitchen/stream", { cache: "no-store", headers: kitchenHeaders(), signal });
+export async function kitchenStream(signal: AbortSignal) {
+  return backendFetch("/kitchen/stream", { cache: "no-store", headers: await kitchenHeaders(), signal });
 }
 
 const diningSession = z.object({ id: z.uuid(), joinCode: z.string() });
 
-export function listDiningSessions() {
+export async function listDiningSessions() {
   const list = z.array(z.object({
     id: z.uuid(), number: z.number().int(), session: diningSession.nullable(), activeTickets: z.number().int(),
   }));
-  return request("/staff/table-sessions", list, { cache: "no-store", headers: kitchenHeaders() });
+  return request("/staff/table-sessions", list, { cache: "no-store", headers: await kitchenHeaders() });
 }
 
-export function getTableOrderHistory(id: string) {
+export async function getTableOrderHistory(id: string) {
   return request("/staff/table-sessions/" + encodeURIComponent(id) + "/orders", z.object({
     number: z.number().int(), orders: z.array(submittedOrder),
-  }), { cache: "no-store", headers: kitchenHeaders() });
+  }), { cache: "no-store", headers: await kitchenHeaders() });
 }
 
-export function resetDiningSession(id: string, input: {
+export async function resetDiningSession(id: string, input: {
   expectedSessionId: string | null; actor: { id: string; role: "ADMIN" | "KITCHEN" }; overrideReason?: string;
 }) {
   return request("/staff/table-sessions/" + encodeURIComponent(id) + "/reset", diningSession, {
     method: "POST", cache: "no-store",
-    headers: { ...kitchenHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(input),
+    headers: { ...await kitchenHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(input),
   });
 }

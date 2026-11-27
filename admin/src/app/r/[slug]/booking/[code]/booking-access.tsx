@@ -3,10 +3,10 @@
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { verifyGuestBooking } from "../../booking-actions";
+import { verifyGuestBooking } from "@/app/booking-actions";
 
-export function VerifyBookingForm({ code }: { code: string }) {
-  const [state, action, pending] = useActionState(verifyGuestBooking.bind(null, code), {});
+export function VerifyBookingForm({ slug, code }: { slug: string; code: string }) {
+  const [state, action, pending] = useActionState(verifyGuestBooking.bind(null, slug, code), {});
   return (
     <form action={action} className="grid gap-3">
       <label className="grid gap-1 text-sm font-medium">Booking phone number <Input type="tel" name="phone" autoComplete="tel" maxLength={40} required /></label>

@@ -4,7 +4,7 @@ import { buildApp } from '../src/app.js'
 import { createDb } from '../src/lib/db.js'
 
 const db = createDb()
-const headers = { 'x-kitchen-api-key': randomUUID() }
+const headers = { 'x-kitchen-api-key': randomUUID(), 'x-restaurant-id': 'default' }
 const app = buildApp({ db, kitchenApiKey: headers['x-kitchen-api-key'] })
 
 afterAll(async () => {
@@ -14,7 +14,7 @@ afterAll(async () => {
 
 test('staff can create, edit and hide a menu item without altering order snapshots', async () => {
   const table = await db.diningTable.create({ data: {
-    number: randomInt(1_000_000_000, 2_000_000_000), qrToken: randomBytes(24).toString('base64url'),
+    restaurantId: 'default', number: randomInt(1_000_000_000, 2_000_000_000), qrToken: randomBytes(24).toString('base64url'),
   } })
   const name = 'Menu test ' + randomUUID()
   const guest = '/t/' + table.qrToken

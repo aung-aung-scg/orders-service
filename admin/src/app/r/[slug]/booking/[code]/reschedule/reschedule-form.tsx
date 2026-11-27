@@ -3,13 +3,14 @@
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { moveGuestBooking } from "../../../booking-actions";
+import { moveGuestBooking } from "@/app/booking-actions";
 
-export function RescheduleForm({ code, revision, slots }: {
+export function RescheduleForm({ slug, code, revision, slots }: {
+  slug: string;
   code: string; revision: string; slots: { startsAt: string; label: string; date: string }[];
 }) {
   const [choice, setChoice] = useState("");
-  const [state, action, pending] = useActionState(moveGuestBooking.bind(null, code, revision), {});
+  const [state, action, pending] = useActionState(moveGuestBooking.bind(null, slug, code, revision), {});
   const selected = slots.find(slot => slot.startsAt === choice);
   return (
     <>

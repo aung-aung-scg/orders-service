@@ -5,7 +5,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
-const session = { sub: "staff-id", username: "kitchen", role: "KITCHEN" } as const;
+const session = { sub: "staff-id", username: "kitchen", role: "KITCHEN", restaurantId: "default", restaurantSlug: "default" } as const;
 const secret = "staff-session-test-secret-00000001";
 
 beforeEach(() => vi.stubEnv("JWT_SECRET", secret));

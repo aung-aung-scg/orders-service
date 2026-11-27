@@ -15,9 +15,9 @@ const transitions: Record<TableOrderStatus, TableOrderStatus[]> = {
 }
 const statusBody = z.object({ status: z.enum(['OPEN', 'SUBMITTED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED']) })
 
-export async function activeTickets(db: PrismaClient) {
+export async function activeTickets(db: PrismaClient, restaurantId: string) {
   const tickets = await db.tableOrder.findMany({
-    where: { status: { in: ['SUBMITTED', 'PREPARING', 'READY'] } },
+    where: { restaurantId, status: { in: ['SUBMITTED', 'PREPARING', 'READY'] } },
     orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
     select: {
       id: true, status: true, submittedAt: true, totalMinor: true,
@@ -44,23 +44,25 @@ export function registerKitchen(app: FastifyInstance, db: PrismaClient, key: str
     throw new HttpError(401, 'UNAUTHORIZED', 'A valid kitchen API key is required')
   })
 
-  app.get('/kitchen/orders', () => activeTickets(db))
+  app.get('/kitchen/orders', request => activeTickets(db, request.restaurant.id))
 
   app.patch('/kitchen/orders/:id/status', async request => {
+    const restaurantId = request.restaurant.id
     const { id } = z.object({ id: z.string() }).parse(request.params)
     const { status } = statusBody.parse(request.body)
-    const order = await db.tableOrder.findUnique({ where: { id }, select: { status: true } })
+    const order = await db.tableOrder.findUnique({ where: { id, restaurantId }, select: { status: true } })
     if (!order) throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found')
     if (!transitions[order.status].includes(status)) {
       throw new HttpError(409, 'INVALID_STATUS_TRANSITION', 'The ticket cannot move to that status')
     }
-    const result = await db.tableOrder.updateMany({ where: { id, status: order.status }, data: { status } })
+    const result = await db.tableOrder.updateMany({ where: { id, restaurantId, status: order.status }, data: { status } })
     if (result.count !== 1) throw new HttpError(409, 'STATUS_CHANGED', 'The ticket status changed')
-    events.emit('change')
+    events.emit('change', restaurantId)
     return { id, status }
   })
 
   app.get('/kitchen/stream', (request, reply) => {
+    const restaurantId = request.restaurant.id
     reply.hijack()
     const stream = reply.raw
     stream.writeHead(200, {
@@ -74,7 +76,7 @@ export function registerKitchen(app: FastifyInstance, db: PrismaClient, key: str
     const send = (event: string) => {
       pending = pending.then(async () => {
         if (stream.destroyed || stream.writableEnded) return
-        const tickets = await activeTickets(db)
+        const tickets = await activeTickets(db, restaurantId)
         write(`event: ${event}\ndata: ${JSON.stringify(tickets)}\n\n`)
       }).catch(error => {
         request.log.error({ err: error }, 'Kitchen stream failed')
@@ -84,11 +86,17 @@ export function registerKitchen(app: FastifyInstance, db: PrismaClient, key: str
     const write = (chunk: string) => {
       if (!stream.destroyed && !stream.writableEnded && !stream.write(chunk)) close()
     }
-    const changed = () => send('tickets')
+    const changed = (changedRestaurantId: string) => {
+      if (changedRestaurantId === restaurantId) send('tickets')
+    }
+    const revoked = (id: string) => {
+      if (id === restaurantId) close()
+    }
     const heartbeat = setInterval(() => write(': heartbeat\n\n'), 15000).unref()
     const cleanup = () => {
       clearInterval(heartbeat)
       events.off('change', changed)
+      events.off('revoke', revoked)
       streams.delete(close)
     }
     const close = () => {
@@ -98,6 +106,7 @@ export function registerKitchen(app: FastifyInstance, db: PrismaClient, key: str
     stream.once('close', cleanup)
     streams.add(close)
     events.on('change', changed)
+    events.on('revoke', revoked)
     send('snapshot')
   })
 }

@@ -10,7 +10,8 @@
     "reconcile": "tsx scripts/reconcile.ts",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx scripts/seed-pos.ts",
-    "db:seed:staff": "tsx scripts/seed-staff.ts"
+    "db:seed:staff": "tsx scripts/seed-staff.ts",
+    "db:seed:super": "tsx scripts/seed-super.ts"
   },
   "keywords": [],
   "author": "",

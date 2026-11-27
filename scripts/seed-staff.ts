@@ -14,13 +14,14 @@ const staff = [
 
 const db = createDb()
 try {
+  const { id: restaurantId } = await db.restaurant.findUniqueOrThrow({ where: { slug: 'default' } })
   const users = await Promise.all(staff.map(async ({ username, role, password }) => ({
     username, role, passwordHash: await hashStaffPassword(password),
   })))
   await db.$transaction(users.map(({ username, role, passwordHash }) => db.staffUser.upsert({
-    where: { username },
-    create: { username, role, passwordHash },
-    update: { role, passwordHash },
+    where: { restaurantId_username: { restaurantId, username } },
+    create: { restaurantId, username, role, passwordHash },
+    update: { role, passwordHash, credentialVersion: { increment: 1 } },
   })))
 } finally {
   await db.$disconnect()

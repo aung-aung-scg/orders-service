@@ -21,6 +21,7 @@ export const orderLabels: Record<SubmittedOrder["status"], string> = {
 export const customerTable = z.object({
   sessionId: z.uuid().nullable(),
   tableNumber: z.number().int(),
+  restaurantName: z.string(),
   menu: z.array(z.object({ id: z.string(), name: z.string(), priceMinor: z.number().int(), imageKey: z.string().nullish() })),
   order: tableOrder.nullable(),
   ticket: ticketStatus.nullable(),

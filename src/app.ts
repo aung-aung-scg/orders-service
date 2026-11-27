@@ -6,6 +6,9 @@ import { createDb } from './lib/db.js'
 import { HttpError } from './lib/errors.js'
 import { registerKitchen } from './routes/kitchen.js'
 import { registerStaffAuth } from './routes/staff-auth.js'
+import { registerPlatform } from './routes/platform.js'
+import type { Writable } from 'node:stream'
+import { requireRestaurant, restaurantBySlug } from './lib/restaurant.js'
 import { registerStaffMenu } from './routes/staff-menu.js'
 import { registerPublicMenuImages, registerStaffMenuImages } from './routes/menu-images.js'
 import { localImageStorage, type ImageStorage } from './lib/image-storage.js'
@@ -19,13 +22,14 @@ import { readEnv, readPosEnv } from './lib/env.js'
 
 export function buildApp(options: {
   db?: ReturnType<typeof createDb>; logger?: boolean; webhookSecret?: string; kitchenApiKey?: string; stockDemo?: boolean;
-  imageStorage?: ImageStorage;
+  imageStorage?: ImageStorage; platformApiKey?: string; logStream?: Writable;
 } = {}) {
   const secret = options.webhookSecret ?? readEnv().WEBHOOK_SECRET
   const { KITCHEN_API_KEY, PUBLIC_BASE_URL } = readPosEnv()
   const db = options.db ?? createDb()
   const app = Fastify({
     logger: options.logger ? {
+      stream: options.logStream,
       serializers: { req: request => ({ method: request.method, route: request.routeOptions?.url }) },
     } : false,
   })
@@ -58,14 +62,28 @@ export function buildApp(options: {
   })
 
   registerReservations(app, db, options.kitchenApiKey ?? KITCHEN_API_KEY)
+  app.get('/restaurants', () => db.restaurant.findMany({
+    where: { active: true }, orderBy: { slug: 'asc' }, select: { slug: true },
+  }))
+  app.get<{ Params: { slug: string } }>('/restaurants/:slug', async request => {
+    const { id, slug, name, timezone, openTime, closeTime, maxDaysAhead, maxParty } =
+      await restaurantBySlug(db, request.params.slug)
+    return { id, slug, name, timezone, openTime, closeTime, maxDaysAhead, maxParty }
+  })
   if (process.env.NODE_ENV !== 'production' && (options.stockDemo ?? (process.env.STOCK_DEMO_ENABLED === 'true'))) {
     app.register(async scope => registerStockDemo(scope, db, options.kitchenApiKey ?? KITCHEN_API_KEY))
   }
   registerTableOrders(app, db, kitchenEvents)
   const images = options.imageStorage ?? localImageStorage()
   registerPublicMenuImages(app, images)
+  const platformKey = options.platformApiKey ?? process.env.PLATFORM_API_KEY
+  app.register(async scope => registerPlatform(
+    scope, db, platformKey !== (options.kitchenApiKey ?? KITCHEN_API_KEY) ? platformKey : undefined,
+    id => kitchenEvents.emit('revoke', id),
+  ))
   app.register(async scope => {
     registerKitchen(scope, db, options.kitchenApiKey ?? KITCHEN_API_KEY, kitchenEvents)
+    scope.addHook('onRequest', request => requireRestaurant(db, request))
     registerStaffAuth(scope, db)
     registerStaffMenu(scope, db)
     scope.register(async imageScope => registerStaffMenuImages(imageScope, db, images))

@@ -13,7 +13,7 @@ let id: string
 
 beforeAll(async () => {
   const staff = await db.staffUser.create({
-    data: { username, role: 'KITCHEN', passwordHash: await hashStaffPassword(password) },
+    data: { restaurantId: 'default', username, role: 'KITCHEN', passwordHash: await hashStaffPassword(password) },
   })
   id = staff.id
 })
@@ -31,7 +31,7 @@ function verify(payload: { username: string; password: string }, authorized = tr
   return app.inject({
     method: 'POST',
     url: '/auth/verify',
-    headers: authorized ? { 'x-kitchen-api-key': key } : {},
+    headers: authorized ? { 'x-kitchen-api-key': key, 'x-restaurant-id': 'default' } : {},
     payload,
   })
 }
@@ -39,7 +39,7 @@ function verify(payload: { username: string; password: string }, authorized = tr
 test('returns staff identity for valid credentials', async () => {
   const response = await verify({ username, password })
   expect(response.statusCode).toBe(200)
-  expect(response.json()).toEqual({ id, username, role: 'KITCHEN' })
+  expect(response.json()).toEqual({ id, username, role: 'KITCHEN', restaurantId: 'default', mustChangePassword: false, credentialVersion: 0 })
 })
 
 test('returns an identical 401 for wrong passwords and unknown users', async () => {

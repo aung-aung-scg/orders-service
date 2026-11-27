@@ -14,17 +14,19 @@ const updateItem = z.strictObject(fields).partial().refine(
 )
 
 export function registerStaffMenu(app: FastifyInstance, db: PrismaClient) {
-  app.get('/staff/menu', () => db.menuItem.findMany({ orderBy: [{ name: 'asc' }, { id: 'asc' }] }))
+  app.get('/staff/menu', request => db.menuItem.findMany({
+    where: { restaurantId: request.restaurant.id }, orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  }))
 
   app.post('/staff/menu', async (request, reply) => {
     const data = createItem.parse(request.body)
-    return reply.code(201).send(await db.menuItem.create({ data }))
+    return reply.code(201).send(await db.menuItem.create({ data: { ...data, restaurantId: request.restaurant.id } }))
   })
 
   app.patch('/staff/menu/:id', async request => {
     const { id } = z.object({ id: z.string().min(1).max(200) }).parse(request.params)
     const data = updateItem.parse(request.body)
-    const [item] = await db.menuItem.updateManyAndReturn({ where: { id }, data })
+    const [item] = await db.menuItem.updateManyAndReturn({ where: { id, restaurantId: request.restaurant.id }, data })
     if (!item) throw new HttpError(404, 'MENU_ITEM_NOT_FOUND', 'Menu item not found')
     return item
   })

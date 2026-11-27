@@ -7,6 +7,7 @@ import { BackendError } from "@/lib/api";
 import { kitchenRoles, requireRole } from "@/lib/auth";
 import { bookingPath, cancelBooking, createBooking, findBookings, rescheduleBooking, updateBookingStatus, verifyBooking } from "@/lib/booking-api";
 import { bookingDate, bookingTime } from "@/lib/booking-display";
+import { getRestaurant } from "@/lib/restaurant-api";
 
 export type BookingState = { error?: string };
 const phoneInput = z.string().trim().max(40).regex(/^\+?[\d().\s-]+$/)
@@ -19,28 +20,28 @@ const guestFields = z.object({
   key: z.uuid(),
 });
 
-export async function verifyGuestBooking(code: string, _state: BookingState, form: FormData): Promise<BookingState> {
+export async function verifyGuestBooking(slug: string, code: string, _state: BookingState, form: FormData): Promise<BookingState> {
   const phone = phoneInput.safeParse(form.get("phone"));
   if (!phone.success) return { error: "Enter the phone number used to book." };
   try {
-    await verifyBooking(code, phone.data);
+    await verifyBooking(slug, code, phone.data);
   } catch (error) {
     return feedback(error);
   }
-  redirect(bookingPath(code));
+  redirect(bookingPath(slug, code));
 }
 
 export type BookingLookupState = BookingState & { bookings?: {
   code: string; date: string; time: string; guests: number; table: number;
 }[] };
 
-export async function lookupGuestBookings(_state: BookingLookupState, form: FormData): Promise<BookingLookupState> {
+export async function lookupGuestBookings(slug: string, _state: BookingLookupState, form: FormData): Promise<BookingLookupState> {
   const phone = phoneInput.safeParse(form.get("phone"));
   if (!phone.success) return { error: "Enter the phone number used to book." };
   try {
-    const rows = await findBookings(phone.data);
+    const [{ timezone }, rows] = await Promise.all([getRestaurant(slug), findBookings(slug, phone.data)]);
     return { bookings: rows.map(row => ({
-      code: row.code, date: bookingDate(row.startsAt), time: bookingTime(row.startsAt),
+      code: row.code, date: bookingDate(row.startsAt, timezone), time: bookingTime(row.startsAt, timezone),
       guests: row.partySize, table: row.table.number,
     })) };
   } catch (error) {
@@ -48,17 +49,17 @@ export async function lookupGuestBookings(_state: BookingLookupState, form: Form
   }
 }
 
-export async function moveGuestBooking(code: string, revision: string, _state: BookingState, form: FormData): Promise<BookingState> {
+export async function moveGuestBooking(slug: string, code: string, revision: string, _state: BookingState, form: FormData): Promise<BookingState> {
   const startsAt = z.iso.datetime().safeParse(form.get("startsAt"));
   if (!startsAt.success) return { error: "Choose a reservation time." };
   try {
-    await rescheduleBooking(code, revision, startsAt.data);
+    await rescheduleBooking(slug, code, revision, startsAt.data);
   } catch (error) {
-    if (error instanceof BackendError && error.status === 409) revalidatePath(bookingPath(code) + "/reschedule");
+    if (error instanceof BackendError && error.status === 409) revalidatePath(bookingPath(slug, code) + "/reschedule");
     return feedback(error);
   }
-  revalidatePath(bookingPath(code));
-  redirect(bookingPath(code));
+  revalidatePath(bookingPath(slug, code));
+  redirect(bookingPath(slug, code));
 }
 
 function feedback(error: unknown): BookingState {
@@ -66,7 +67,7 @@ function feedback(error: unknown): BookingState {
   return { error: "The booking service is unavailable. Try again shortly." };
 }
 
-export async function submitBooking(startsAt: string, partySize: number, _state: BookingState, form: FormData): Promise<BookingState> {
+export async function submitBooking(slug: string, startsAt: string, partySize: number, _state: BookingState, form: FormData): Promise<BookingState> {
   const fields = guestFields.safeParse({
     guestName: form.get("guestName"), phone: form.get("phone"), email: form.get("email"),
     notes: form.get("notes"), key: form.get("key"),
@@ -75,7 +76,7 @@ export async function submitBooking(startsAt: string, partySize: number, _state:
   const { key, guestName, phone, email, notes } = fields.data;
   let code: string;
   try {
-    ({ code } = await createBooking({ startsAt, partySize, guestName, phone, email: email || undefined, notes: notes || undefined }, key));
+    ({ code } = await createBooking(slug, { startsAt, partySize, guestName, phone, email: email || undefined, notes: notes || undefined }, key));
   } catch (error) {
     if (error instanceof BackendError && error.code === "SLOT_UNAVAILABLE") {
       revalidatePath("/book");
@@ -83,17 +84,17 @@ export async function submitBooking(startsAt: string, partySize: number, _state:
     }
     return feedback(error);
   }
-  redirect(bookingPath(code));
+  redirect(bookingPath(slug, code));
 }
 
-export async function cancelGuestBooking(code: string): Promise<BookingState> {
+export async function cancelGuestBooking(slug: string, code: string): Promise<BookingState> {
   try {
-    await cancelBooking(code);
+    await cancelBooking(slug, code);
   } catch (error) {
-    if (error instanceof BackendError && error.code === "CANNOT_CANCEL") revalidatePath(bookingPath(code));
+    if (error instanceof BackendError && error.code === "CANNOT_CANCEL") revalidatePath(bookingPath(slug, code));
     return feedback(error);
   }
-  revalidatePath(bookingPath(code));
+  revalidatePath(bookingPath(slug, code));
   return {};
 }
 

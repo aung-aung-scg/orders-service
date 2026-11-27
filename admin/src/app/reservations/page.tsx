@@ -5,18 +5,22 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { kitchenRoles, requireRole } from "@/lib/auth";
 import { getStaffBookings } from "@/lib/booking-api";
-import { bookingTime, bookingToday, bookingZone } from "@/lib/booking-display";
+import { bookingTime, bookingToday } from "@/lib/booking-display";
+import { publicRestaurant } from "@/lib/restaurant-api";
+import { WorkspaceEmpty, WorkspaceLoadError } from "@/app/restaurant-admin/workspace-state";
 import { StatusButton } from "./status-button";
 
 export default async function ReservationsPage({ searchParams }: PageProps<"/reservations">) {
   const query = await searchParams;
-  const date = z.iso.date().safeParse(query.date).data ?? bookingToday();
-  const next = query.date ? "/reservations?" + new URLSearchParams({ date }) : "/reservations";
-  await requireRole(kitchenRoles, { next });
+  const requested = z.iso.date().safeParse(query.date).data;
+  const next = requested ? "/reservations?" + new URLSearchParams({ date: requested }) : "/reservations";
+  const session = await requireRole(kitchenRoles, { next });
+  const { timezone: bookingZone } = await publicRestaurant(session.restaurantSlug);
+  const date = requested ?? bookingToday(bookingZone);
   const reservations = await getStaffBookings(date).catch(() => null);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-8">
+    <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Reservations</h1>
@@ -27,15 +31,15 @@ export default async function ReservationsPage({ searchParams }: PageProps<"/res
           <Button type="submit" variant="outline">View day</Button>
         </form>
       </header>
-      {!reservations ? <p role="alert" className="text-destructive">Couldn’t load reservations. Try again.</p> :
-        !reservations.length ? <p className="rounded-2xl border bg-card p-5 text-muted-foreground">No reservations for this day.</p> : (
+      {!reservations ? <WorkspaceLoadError message="Couldn’t load reservations." /> :
+        !reservations.length ? <WorkspaceEmpty title="No reservations for this day" /> : (
           <ul className="space-y-3">
             {reservations.map(booking => (
               <li key={booking.id}>
                 <Card className="gap-3 rounded-2xl p-4 shadow-sm sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <h2 className="font-semibold">{bookingTime(booking.startsAt)}–{bookingTime(booking.endsAt)} · {booking.guestName}</h2>
+                      <h2 className="font-semibold">{bookingTime(booking.startsAt, bookingZone)}–{bookingTime(booking.endsAt, bookingZone)} · {booking.guestName}</h2>
                       <p className="text-sm text-muted-foreground">{booking.partySize} guests · {booking.phone}</p>
                     </div>
                     <Badge variant={booking.status === "SEATED" ? "default" : "secondary"}>
