@@ -73,18 +73,58 @@ enum TableOrderStatus {
   CANCELLED
 }
 
+model Restaurant {
+  id                  String   @id @default(uuid())
+  slug                String   @unique
+  name                String
+  active              Boolean  @default(true)
+  timezone            String   @default("Asia/Bangkok")
+  openTime            String   @default("10:00")
+  closeTime           String   @default("22:00")
+  slotMinutes         Int      @default(30)
+  durationMinutes     Int      @default(90)
+  maxDaysAhead        Int      @default(30)
+  minLeadMinutes      Int      @default(60)
+  cancelCutoffMinutes Int      @default(120)
+  maxParty            Int      @default(10)
+  createdAt           DateTime @default(now())
+  tables              DiningTable[]
+  menu                 MenuItem[]
+  reservations         Reservation[]
+  sessions             DiningSession[]
+  orders               TableOrder[]
+  staff                StaffUser[]
+  platformAudit        PlatformAudit[]
+}
+
+model PlatformAudit {
+  id           String     @id @default(uuid())
+  actor        String
+  action       String
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime   @default(now())
+  @@index([restaurantId, createdAt])
+}
+
 model DiningTable {
+  restaurantId String
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  @@unique([restaurantId, number])
   sessions DiningSession[]
   capacity Int @default(4)
   reservations Reservation[]
   id      String       @id @default(uuid())
-  number  Int          @unique
+  number  Int
   qrToken String       @unique
   active  Boolean      @default(true)
   orders  TableOrder[]
 }
 
 model DiningSession {
+  restaurantId String
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  @@index([restaurantId])
   id             String      @id @default(uuid())
   tableId        String
   joinCode       String      @unique
@@ -109,6 +149,8 @@ enum ReservationStatus {
 }
 
 model Reservation {
+  restaurantId String
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
   id        String            @id @default(uuid())
   tableId   String
   partySize Int
@@ -124,10 +166,13 @@ model Reservation {
   updatedAt DateTime          @updatedAt
   table     DiningTable       @relation(fields: [tableId], references: [id])
 
-  @@index([startsAt])
+  @@index([restaurantId, startsAt])
 }
 
 model MenuItem {
+  restaurantId String
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  @@index([restaurantId])
   id        String           @id @default(uuid())
   name      String
   priceMinor Int
@@ -137,6 +182,9 @@ model MenuItem {
 }
 
 model TableOrder {
+  restaurantId String
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  @@index([restaurantId, status])
   version     Int              @default(0)
   sessionId   String?
   session     DiningSession?   @relation(fields: [sessionId], references: [id])
@@ -170,11 +218,17 @@ model TableOrderItem {
 enum StaffRole {
   ADMIN
   KITCHEN
+  SUPER_ADMIN
 }
 
 model StaffUser {
+  restaurantId String?
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  mustChangePassword Boolean @default(false)
+  credentialVersion  Int     @default(0)
+  @@unique([restaurantId, username])
   id           String    @id @default(uuid())
-  username     String    @unique
+  username     String
   passwordHash String
   role         StaffRole
   createdAt    DateTime  @default(now())

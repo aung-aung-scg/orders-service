@@ -9,7 +9,7 @@ import { createDb } from '../src/lib/db.js'
 import { localImageStorage, menuImageMaxBytes } from '../src/lib/image-storage.js'
 
 const db = createDb()
-const staff = { 'x-kitchen-api-key': randomUUID() }
+const staff = { 'x-kitchen-api-key': randomUUID(), 'x-restaurant-id': 'default' }
 let directory: string
 let app: ReturnType<typeof buildApp>
 let id: string
@@ -17,7 +17,7 @@ let id: string
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'menu-images-'))
   app = buildApp({ db, kitchenApiKey: staff['x-kitchen-api-key'], imageStorage: localImageStorage(directory) })
-  id = (await db.menuItem.create({ data: { name: 'Image test ' + randomUUID(), priceMinor: 100 } })).id
+  id = (await db.menuItem.create({ data: { restaurantId: 'default', name: 'Image test ' + randomUUID(), priceMinor: 100 } })).id
 })
 
 afterAll(async () => {
@@ -78,7 +78,7 @@ test('normalizes JPEG, PNG and WebP, replaces files and removes images idempoten
   }
 
   const table = await db.diningTable.create({ data: {
-    number: 1_000_000 + Math.floor(Math.random() * 1_000_000_000), qrToken: randomUUID(),
+    restaurantId: 'default', number: 1_000_000 + Math.floor(Math.random() * 1_000_000_000), qrToken: randomUUID(),
   } })
   try {
     const session = await app.inject({

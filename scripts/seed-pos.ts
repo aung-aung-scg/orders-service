@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { createDb } from '../src/lib/db.js'
+import { seedDefaultRestaurant } from '../src/lib/booking.js'
 
 const menu: [string, number][] = [
   ['Pad Thai', 8500], ['Green Curry', 11000], ['Fried Rice', 7500],
@@ -9,15 +10,16 @@ const menu: [string, number][] = [
 ]
 const db = createDb()
 try {
+  const { id: restaurantId } = await seedDefaultRestaurant(db)
   await db.$transaction([
     ...Array.from({ length: 5 }, (_, index) => db.diningTable.upsert({
-      where: { number: index + 1 },
-      create: { number: index + 1, capacity: [2, 2, 4, 4, 6][index], qrToken: randomBytes(24).toString('base64url') },
+      where: { restaurantId_number: { restaurantId, number: index + 1 } },
+      create: { restaurantId, number: index + 1, capacity: [2, 2, 4, 4, 6][index], qrToken: randomBytes(24).toString('base64url') },
       update: { capacity: [2, 2, 4, 4, 6][index] },
     })),
     ...menu.map(([name, priceMinor], index) => db.menuItem.upsert({
-      where: { id: `pos-seed-${index + 1}` },
-      create: { id: `pos-seed-${index + 1}`, name, priceMinor },
+      where: { id: `pos-seed-${index + 1}`, restaurantId },
+      create: { id: `pos-seed-${index + 1}`, restaurantId, name, priceMinor },
       update: {},
     })),
   ])

@@ -4,7 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { submitBooking } from "../booking-actions";
+import { submitBooking } from "@/app/booking-actions";
 
 export function PartySize({ size, max }: { size: number; max: number }) {
   const input = useRef<HTMLInputElement>(null);
@@ -20,11 +20,12 @@ export function PartySize({ size, max }: { size: number; max: number }) {
   );
 }
 
-export function BookingForm({ startsAt, partySize, renderKey, unavailable }: {
+export function BookingForm({ slug, startsAt, partySize, renderKey, unavailable }: {
+  slug: string;
   startsAt: string; partySize: number; renderKey: string; unavailable: boolean;
 }) {
   const [key] = useState(renderKey);
-  const [state, action, pending] = useActionState(submitBooking.bind(null, startsAt, partySize), {});
+  const [state, action, pending] = useActionState(submitBooking.bind(null, slug, startsAt, partySize), {});
   return (
     <form action={action} className="grid gap-4">
       <input type="hidden" name="key" value={key} />

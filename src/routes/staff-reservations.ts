@@ -16,14 +16,14 @@ const statusBody = z.strictObject({
 })
 
 export function registerStaffReservations(app: FastifyInstance, db: PrismaClient) {
-  const { instant, localParts } = readBookingConfig()
   app.get('/staff/reservations', async (request, reply) => {
+    const { instant, localParts } = readBookingConfig(request.restaurant)
     const { date } = z.object({ date: dateInput }).parse(request.query)
     const next = shiftDay(date, 1)
     const start = instant(date, 0) ?? Date.parse(shiftDay(date, -1) + 'T00:00:00Z')
     const end = instant(next, 0) ?? Date.parse(shiftDay(next, 1) + 'T00:00:00Z')
     const reservations = await db.reservation.findMany({
-      where: { startsAt: { gte: new Date(start), lt: new Date(end) } },
+      where: { restaurantId: request.restaurant.id, startsAt: { gte: new Date(start), lt: new Date(end) } },
       orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
       select: {
         id: true, partySize: true, startsAt: true, endsAt: true, status: true,
@@ -39,12 +39,13 @@ export function registerStaffReservations(app: FastifyInstance, db: PrismaClient
   app.patch('/staff/reservations/:id/status', async request => {
     const { id } = z.object({ id: z.uuid() }).parse(request.params)
     const { status } = statusBody.parse(request.body)
-    const current = await db.reservation.findUnique({ where: { id }, select: { status: true } })
+    const restaurantId = request.restaurant.id
+    const current = await db.reservation.findUnique({ where: { id, restaurantId }, select: { status: true } })
     if (!current) throw new HttpError(404, 'RESERVATION_NOT_FOUND', 'Reservation not found')
     if (!changes[current.status].includes(status)) {
       throw new HttpError(409, 'INVALID_STATUS_TRANSITION', 'The reservation cannot move to that status')
     }
-    const updated = await db.reservation.updateMany({ where: { id, status: current.status }, data: { status } })
+    const updated = await db.reservation.updateMany({ where: { id, restaurantId, status: current.status }, data: { status } })
     if (!updated.count) throw new HttpError(409, 'STATUS_CHANGED', 'The reservation status changed')
     return { id, status }
   })

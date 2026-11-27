@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js'
 import { z } from 'zod'
 import { HttpError } from '../lib/errors.js'
+import { restaurantUnavailable } from '../lib/restaurant.js'
 import { idempotencyKey } from '../schemas/index.js'
 import { withIdempotency } from '../services/idempotency.js'
 import { activeSession, lockTable, submittedOrderFields } from '../services/dining-sessions.js'
@@ -20,8 +21,12 @@ const checkoutBody = z.strictObject({ cartId: z.uuid(), version: z.number().int(
 const withItems = { items: { orderBy: { id: 'asc' } } } as const
 
 async function findTable(db: Prisma.TransactionClient, qrToken: string) {
-  const table = await db.diningTable.findUnique({ where: { qrToken, active: true } })
+  const table = await db.diningTable.findUnique({
+    where: { qrToken, active: true },
+    include: { restaurant: { select: { name: true, active: true } } },
+  })
   if (!table) throw new HttpError(404, 'TABLE_NOT_FOUND', 'Table not found')
+  if (!table.restaurant.active) throw restaurantUnavailable()
   return table
 }
 
@@ -34,31 +39,31 @@ async function updateTotal(tx: Prisma.TransactionClient, orderId: string) {
 
 export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitchenEvents: EventEmitter) {
   const expiryMinutes = z.coerce.number().int().min(1).max(10080).default(120).parse(process.env.CART_INACTIVITY_MINUTES)
-  async function openOrder(tx: Prisma.TransactionClient, sessionId: string) {
+  async function openOrder(tx: Prisma.TransactionClient, restaurantId: string, sessionId: string) {
     await tx.tableOrder.updateMany({
-      where: { sessionId, status: 'OPEN', updatedAt: { lte: new Date(Date.now() - expiryMinutes * 60000) } },
+      where: { restaurantId, sessionId, status: 'OPEN', updatedAt: { lte: new Date(Date.now() - expiryMinutes * 60000) } },
       data: { status: 'CANCELLED' },
     })
-    return tx.tableOrder.findFirst({ where: { sessionId, status: 'OPEN' }, include: withItems })
+    return tx.tableOrder.findFirst({ where: { restaurantId, sessionId, status: 'OPEN' }, include: withItems })
   }
 
-  async function sessionFor(request: FastifyRequest, tableId: string) {
+  async function sessionFor(request: FastifyRequest, { id: tableId, restaurantId }: { id: string; restaurantId: string }) {
     const token = request.headers['x-dining-session']
     if (typeof token !== 'string' || !/^[\w-]{32}$/.test(token)) return null
-    return db.diningSession.findUnique({ where: { tableId, accessToken: token } })
+    return db.diningSession.findUnique({ where: { restaurantId, tableId, accessToken: token } })
   }
 
-  async function writeSession(request: FastifyRequest, tableId: string) {
-    const session = await sessionFor(request, tableId)
+  async function writeSession(request: FastifyRequest, table: { id: string; restaurantId: string }) {
+    const session = await sessionFor(request, table)
     if (!session || session.id !== request.headers['x-dining-session-id']) {
       throw new HttpError(403, 'JOIN_REQUIRED', 'Join the current dining session before ordering')
     }
-    takeWriteSlot('order:' + session.id)
+    takeWriteSlot('order:' + session.restaurantId + ':' + session.id)
     return session
   }
 
-  async function assertActive(tx: Prisma.TransactionClient, tableId: string, sessionId: string) {
-    if ((await activeSession(tx, tableId))?.id !== sessionId) {
+  async function assertActive(tx: Prisma.TransactionClient, restaurantId: string, tableId: string, sessionId: string) {
+    if ((await activeSession(tx, restaurantId, tableId))?.id !== sessionId) {
       throw new HttpError(409, 'SESSION_ENDED', 'This seating ended. Ask staff for the current join code.')
     }
   }
@@ -85,9 +90,9 @@ export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitc
 
   app.post('/t/:qrToken/join', async (request, reply) => {
     const table = await requestTable(request)
-    takeWriteSlot('join:' + table.id)
+    takeWriteSlot('join:' + table.restaurantId + ':' + table.id)
     const { code } = z.object({ code: z.string().trim().toUpperCase().regex(/^[0-9A-F]{10}$/) }).parse(request.body)
-    const session = await activeSession(db, table.id)
+    const session = await activeSession(db, table.restaurantId, table.id)
     if (!session || session.joinCode !== code) throw new HttpError(403, 'INVALID_JOIN_CODE', 'Ask staff for the current join code')
     return reply.header('Cache-Control', 'no-store').send({ sessionId: session.id, accessToken: session.accessToken })
   })
@@ -96,23 +101,23 @@ export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitc
     const { qrToken } = tokenParams.parse(request.params)
     const table = await findTable(db, qrToken)
     const { orderId } = z.object({ orderId: z.string().uuid().optional() }).parse(request.query)
-    const session = await sessionFor(request, table.id)
+    const session = await sessionFor(request, table)
     reply.header('Cache-Control', 'no-store')
     const withoutSession = {
-      tableNumber: table.number, sessionId: null, menu: [], order: null, ticket: null,
+      tableNumber: table.number, restaurantName: table.restaurant.name, sessionId: null, menu: [], order: null, ticket: null,
       submittedOrders: [], sessionTotalMinor: 0, sessionEnded: Boolean(session?.endedAt),
     }
     if (!session || session.endedAt) return withoutSession
     return db.$transaction(async tx => {
       await lockTable(tx, table.id)
-      if ((await activeSession(tx, table.id))?.id !== session.id) {
+      if ((await activeSession(tx, table.restaurantId, table.id))?.id !== session.id) {
         return { ...withoutSession, sessionEnded: true }
       }
       const [menu, order, submittedOrders] = await Promise.all([
-        tx.menuItem.findMany({ where: { available: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }),
-        openOrder(tx, session.id),
+        tx.menuItem.findMany({ where: { restaurantId: table.restaurantId, available: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }),
+        openOrder(tx, table.restaurantId, session.id),
         tx.tableOrder.findMany({
-          where: { sessionId: session.id, submittedAt: { not: null } },
+          where: { restaurantId: table.restaurantId, sessionId: session.id, submittedAt: { not: null } },
           orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }], select: submittedOrderFields,
         }),
       ])
@@ -120,28 +125,31 @@ export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitc
       const ticket = selected ? { id: selected.id, status: selected.status } : null
       const sessionTotalMinor = submittedOrders.reduce((sum, submitted) =>
         submitted.status === 'CANCELLED' ? sum : sum + submitted.totalMinor, 0)
-      return { tableNumber: table.number, sessionId: session.id, menu, order, ticket, submittedOrders, sessionTotalMinor, sessionEnded: false }
+      return { ...withoutSession, sessionId: session.id, menu, order, ticket, submittedOrders, sessionTotalMinor, sessionEnded: false }
     })
   })
 
   app.post('/t/:qrToken/order/items', async request => {
     const table = await requestTable(request)
-    const session = await writeSession(request, table.id)
+    const session = await writeSession(request, table)
     const { items } = addBody.parse(request.body)
     return db.$transaction(async tx => {
       await lockTable(tx, table.id)
-      await assertActive(tx, table.id, session.id)
-      let order = await openOrder(tx, session.id)
+      await assertActive(tx, table.restaurantId, table.id, session.id)
+      let order = await openOrder(tx, table.restaurantId, session.id)
       if (!order) {
-        await tx.tableOrder.createMany({ data: { id: randomUUID(), tableId: table.id, sessionId: session.id }, skipDuplicates: true })
-        order = await openOrder(tx, session.id)
+        await tx.tableOrder.createMany({
+          data: { id: randomUUID(), restaurantId: table.restaurantId, tableId: table.id, sessionId: session.id },
+          skipDuplicates: true,
+        })
+        order = await openOrder(tx, table.restaurantId, session.id)
         if (!order) throw new HttpError(409, 'ORDER_CHANGED', 'The open order changed. Try again.')
       }
       if (order.items.length + items.length > 50) {
         throw new HttpError(409, 'LINE_LIMIT', 'An order can have at most 50 lines')
       }
       const menu = await tx.menuItem.findMany({
-        where: { id: { in: items.map(item => item.menuItemId) }, available: true },
+        where: { restaurantId: table.restaurantId, id: { in: items.map(item => item.menuItemId) }, available: true },
       })
       const byId = new Map(menu.map(item => [item.id, item]))
       const orderId = order.id
@@ -156,13 +164,13 @@ export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitc
 
   app.patch('/t/:qrToken/order/items/:itemId', async request => {
     const table = await requestTable(request)
-    const session = await writeSession(request, table.id)
+    const session = await writeSession(request, table)
     const { itemId } = z.object({ itemId: z.string() }).parse(request.params)
     const { quantity } = patchBody.parse(request.body)
     return db.$transaction(async tx => {
       await lockTable(tx, table.id)
-      await assertActive(tx, table.id, session.id)
-      const order = await openOrder(tx, session.id)
+      await assertActive(tx, table.restaurantId, table.id, session.id)
+      const order = await openOrder(tx, table.restaurantId, session.id)
       if (!order || !order.items.some(item => item.id === itemId)) {
         throw new HttpError(404, 'ORDER_ITEM_NOT_FOUND', 'Open order item not found')
       }
@@ -176,11 +184,11 @@ export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitc
     const key = idempotencyKey.parse(request.headers['idempotency-key'])
     const checkout = checkoutBody.parse(request.body)
     const table = await requestTable(request)
-    const session = await writeSession(request, table.id)
+    const session = await writeSession(request, table)
     const result = await withIdempotency(db, checkout, `pos:${table.id}:${session.id}:${key}`, async tx => {
       await lockTable(tx, table.id)
-      await assertActive(tx, table.id, session.id)
-      const order = await openOrder(tx, session.id)
+      await assertActive(tx, table.restaurantId, table.id, session.id)
+      const order = await openOrder(tx, table.restaurantId, session.id)
       if (order?.id !== checkout.cartId || order.version !== checkout.version) {
         return { responseStatus: 409, responseBody: { code: 'CART_CHANGED', message: 'Your cart changed. Review it and try again.' } }
       }
@@ -194,7 +202,7 @@ export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitc
       })
       return { responseStatus: 201, responseBody: ticket }
     })
-    if (!result.replayed && result.responseStatus === 201) kitchenEvents.emit('change')
+    if (!result.replayed && result.responseStatus === 201) kitchenEvents.emit('change', table.restaurantId)
     return reply.code(result.responseStatus).send(result.responseBody)
   })
 }

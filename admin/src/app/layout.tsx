@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={geist.variable} suppressHydrationWarning>
       <body>
-        {session && (
+        {session && !session.mustChangePassword && (
           <header data-staff-nav className="border-b bg-card print:hidden">
             <nav aria-label="Staff" className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center gap-1 px-3 py-2 sm:gap-2 sm:px-8">
               <span className="mr-auto hidden text-sm font-semibold sm:block">Orders admin</span>

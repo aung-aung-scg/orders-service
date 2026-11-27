@@ -45,77 +45,77 @@ async function bookingHeaders(code?: string) {
   return response;
 }
 
-export async function getAvailability(date: string, partySize: number) {
+export async function getAvailability(slug: string, date: string, partySize: number) {
   const query = new URLSearchParams({ date, partySize: String(partySize), summary: "1" });
-  return request("/availability?" + query, z.object({
+  return request("/restaurants/" + encodeURIComponent(slug) + "/availability?" + query, z.object({
     slots, state: z.enum(["AVAILABLE", "CLOSED", "FULLY_BOOKED", "NO_REMAINING_SLOTS"]),
   }), { cache: "no-store", headers: await publicHeaders() });
 }
 
-export async function createBooking(input: {
+export async function createBooking(slug: string, input: {
   startsAt: string; partySize: number; guestName: string; phone: string; email?: string; notes?: string;
 }, key: string) {
   const requestHeaders = new Headers(await publicHeaders());
   requestHeaders.set("Content-Type", "application/json");
   requestHeaders.set("Idempotency-Key", key);
-  const result = await request("/reservations", booking.extend(access.shape), {
+  const result = await request("/restaurants/" + encodeURIComponent(slug) + "/reservations", booking.extend(access.shape), {
     method: "POST", cache: "no-store", headers: requestHeaders, body: JSON.stringify(input),
   });
   await rememberBooking(result.code, result);
   return result;
 }
 
-export function bookingPath(code: string) {
-  return "/booking/" + encodeURIComponent(code);
+export function bookingPath(slug: string, code: string) {
+  return "/r/" + encodeURIComponent(slug) + "/booking/" + encodeURIComponent(code);
 }
 
-export async function getBooking(code: string) {
-  return request("/reservations/" + encodeURIComponent(code), bookingView, { cache: "no-store", headers: await bookingHeaders(code) });
+export async function getBooking(slug: string, code: string) {
+  return request("/restaurants/" + encodeURIComponent(slug) + "/reservations/" + encodeURIComponent(code), bookingView, { cache: "no-store", headers: await bookingHeaders(code) });
 }
 
-export async function cancelBooking(code: string) {
-  return request("/reservations/" + encodeURIComponent(code) + "/cancel", z.object({ status }), {
+export async function cancelBooking(slug: string, code: string) {
+  return request("/restaurants/" + encodeURIComponent(slug) + "/reservations/" + encodeURIComponent(code) + "/cancel", z.object({ status }), {
     method: "POST", cache: "no-store", headers: await bookingHeaders(code),
     body: "{}",
   });
 }
 
-export async function verifyBooking(code: string, phone: string) {
-  const grant = await request("/reservations/" + encodeURIComponent(code) + "/verify", access, {
+export async function verifyBooking(slug: string, code: string, phone: string) {
+  const grant = await request("/restaurants/" + encodeURIComponent(slug) + "/reservations/" + encodeURIComponent(code) + "/verify", access, {
     method: "POST", cache: "no-store", headers: await bookingHeaders(), body: JSON.stringify({ phone }),
   });
   await rememberBooking(code, grant);
 }
 
-export async function findBookings(phone: string) {
+export async function findBookings(slug: string, phone: string) {
   const grants = (await cookies()).getAll().filter(cookie => cookie.name.startsWith(cookiePrefix))
     .map(cookie => cookie.value).filter(value => value.length <= 150).slice(-64);
-  return request("/reservations/lookup", z.array(bookingView), {
+  return request("/restaurants/" + encodeURIComponent(slug) + "/reservations/lookup", z.array(bookingView), {
     method: "POST", cache: "no-store", headers: await bookingHeaders(), body: JSON.stringify({ phone, grants }),
   });
 }
 
-export async function rescheduleAvailability(code: string, date: string) {
-  return request("/reservations/" + encodeURIComponent(code) + "/availability?" + new URLSearchParams({ date }), z.array(times), {
+export async function rescheduleAvailability(slug: string, code: string, date: string) {
+  return request("/restaurants/" + encodeURIComponent(slug) + "/reservations/" + encodeURIComponent(code) + "/availability?" + new URLSearchParams({ date }), z.array(times), {
     cache: "no-store", headers: await bookingHeaders(code),
   });
 }
 
-export async function rescheduleBooking(code: string, revision: string, startsAt: string) {
-  return request("/reservations/" + encodeURIComponent(code) + "/reschedule", bookingView, {
+export async function rescheduleBooking(slug: string, code: string, revision: string, startsAt: string) {
+  return request("/restaurants/" + encodeURIComponent(slug) + "/reservations/" + encodeURIComponent(code) + "/reschedule", bookingView, {
     method: "PATCH", cache: "no-store", headers: await bookingHeaders(code), body: JSON.stringify({ revision, startsAt }),
   });
 }
 
-export function getStaffBookings(date: string) {
+export async function getStaffBookings(date: string) {
   return request("/staff/reservations?" + new URLSearchParams({ date }), staffList, {
-    cache: "no-store", headers: kitchenHeaders(),
+    cache: "no-store", headers: await kitchenHeaders(),
   });
 }
 
-export function updateBookingStatus(id: string, next: z.infer<typeof status>) {
+export async function updateBookingStatus(id: string, next: z.infer<typeof status>) {
   return request("/staff/reservations/" + encodeURIComponent(id) + "/status", z.object({ id: z.uuid(), status }), {
     method: "PATCH", cache: "no-store",
-    headers: { ...kitchenHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ status: next }),
+    headers: { ...await kitchenHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ status: next }),
   });
 }

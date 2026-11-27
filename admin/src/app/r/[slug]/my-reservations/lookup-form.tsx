@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { lookupGuestBookings } from "../booking-actions";
+import { lookupGuestBookings } from "@/app/booking-actions";
 
-export function LookupForm() {
-  const [state, action, pending] = useActionState(lookupGuestBookings, {});
+export function LookupForm({ slug }: { slug: string }) {
+  const [state, action, pending] = useActionState(lookupGuestBookings.bind(null, slug), {});
   return (
     <>
       <form action={action} className="grid gap-3">
@@ -20,7 +20,7 @@ export function LookupForm() {
           {state.bookings.map(booking => (
             <li key={booking.code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-sm">
               <div><p className="font-medium">{booking.date} · {booking.time}</p><p>{booking.guests} guests · Table {booking.table}</p></div>
-              <Button asChild size="sm" variant="outline"><Link prefetch={false} href={"/booking/" + encodeURIComponent(booking.code)}>View reservation</Link></Button>
+              <Button asChild size="sm" variant="outline"><Link prefetch={false} href={"/r/" + slug + "/booking/" + encodeURIComponent(booking.code)}>View reservation</Link></Button>
             </li>
           ))}
         </ul>

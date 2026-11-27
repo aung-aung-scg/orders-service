@@ -11,19 +11,21 @@ const tableBody = z.strictObject({ number: z.number().int().min(1).max(214748364
 const tableFields = { id: true, number: true, qrToken: true, active: true } as const
 
 export function registerTables(app: FastifyInstance, db: PrismaClient, publicBaseUrl: string, kitchenEvents: EventEmitter) {
-  app.get('/tables', () => db.diningTable.findMany({ orderBy: { number: 'asc' }, select: tableFields }))
+  app.get('/tables', request => db.diningTable.findMany({
+    where: { restaurantId: request.restaurant.id }, orderBy: { number: 'asc' }, select: tableFields,
+  }))
 
-  app.get('/staff/table-sessions', async (_request, reply) =>
-    reply.header('Cache-Control', 'no-store').send(await listDiningSessions(db)))
+  app.get('/staff/table-sessions', async (request, reply) =>
+    reply.header('Cache-Control', 'no-store').send(await listDiningSessions(db, request.restaurant.id)))
 
   app.get('/staff/table-sessions/:id/orders', async (request, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(request.params)
     const table = await db.diningTable.findUnique({
-      where: { id },
+      where: { id, restaurantId: request.restaurant.id },
       select: {
         number: true,
         orders: {
-          where: { submittedAt: { not: null } },
+          where: { restaurantId: request.restaurant.id, submittedAt: { not: null } },
           orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
           select: submittedOrderFields,
         },
@@ -40,15 +42,15 @@ export function registerTables(app: FastifyInstance, db: PrismaClient, publicBas
       actor: z.object({ id: z.string().min(1).max(200), role: z.enum(['ADMIN', 'KITCHEN']) }),
       overrideReason: z.string().trim().min(1).max(500).optional(),
     }).parse(request.body)
-    const session = await resetDiningSession(db, id, input)
-    if (input.overrideReason) kitchenEvents.emit('change')
+    const session = await resetDiningSession(db, request.restaurant.id, id, input)
+    if (input.overrideReason) kitchenEvents.emit('change', request.restaurant.id)
     return reply.header('Cache-Control', 'no-store').send(session)
   })
 
   app.post('/tables', async (request, reply) => {
     const { number } = tableBody.parse(request.body)
     const table = await db.diningTable.create({
-      data: { number, qrToken: randomBytes(24).toString('base64url') },
+      data: { number, restaurantId: request.restaurant.id, qrToken: randomBytes(24).toString('base64url') },
       select: tableFields,
     })
     return reply.code(201).send(table)
@@ -56,7 +58,7 @@ export function registerTables(app: FastifyInstance, db: PrismaClient, publicBas
 
   app.get('/tables/:id/qr', async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params)
-    const table = await db.diningTable.findUnique({ where: { id }, select: { qrToken: true } })
+    const table = await db.diningTable.findUnique({ where: { id, restaurantId: request.restaurant.id }, select: { qrToken: true } })
     if (!table) throw new HttpError(404, 'TABLE_NOT_FOUND', 'Table not found')
     const url = new URL('/t/' + table.qrToken, publicBaseUrl)
     const svg = await QRCode.toString(url.href, { type: 'svg' })

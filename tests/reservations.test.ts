@@ -41,7 +41,7 @@ test('availability summary distinguishes closed, elapsed, and genuinely full slo
 
 beforeEach(async () => {
   const table = await db.diningTable.create({ data: {
-    number: randomInt(1_000_000_000, 2_000_000_000), qrToken: randomBytes(24).toString('base64url'), capacity: 10,
+    restaurantId: 'default', number: randomInt(1_000_000_000, 2_000_000_000), qrToken: randomBytes(24).toString('base64url'), capacity: 10,
   } })
   tableId = table.id
 })
@@ -51,9 +51,9 @@ afterEach(async () => {
   await db.diningTable.delete({ where: { id: tableId } })
 })
 
-function create(startsAt = start, partySize = 10, key = randomUUID(), target = app) {
-  return target.inject({
-    method: 'POST', url: '/reservations',
+function create(startsAt = start, partySize = 10, key = randomUUID(), slug?: string) {
+  return app.inject({
+    method: 'POST', url: slug ? '/restaurants/' + slug + '/reservations' : '/reservations',
     headers: { 'idempotency-key': `${run}:${key}` },
     payload: { startsAt: new Date(startsAt).toISOString(), partySize, guestName: run, phone: '0800000000' },
   })
@@ -132,7 +132,7 @@ test('a staff seating and guest cancellation can only succeed once', async () =>
   const results = await Promise.all([
     app.inject({ method: 'POST', url: '/reservations/' + booking.code + '/cancel', headers: authorization(booking.code) }),
     app.inject({ method: 'PATCH', url: `/staff/reservations/${booking.id}/status`,
-      headers: { 'x-kitchen-api-key': key }, payload: { status: 'SEATED' } }),
+      headers: { 'x-kitchen-api-key': key, 'x-restaurant-id': 'default' }, payload: { status: 'SEATED' } }),
   ])
   expect(results.map(result => result.statusCode).sort()).toEqual([200, 409])
   const details = await app.inject({ url: '/reservations/' + booking.code, headers: authorization(booking.code) })
@@ -236,32 +236,32 @@ test('concurrent moves for the last fitting table keep the losing reservation in
   expect(results.map(result => result.statusCode).sort()).toEqual([200, 409])
   const loser = results[0].statusCode === 409 ? first : second
   const unchanged = await db.reservation.findUniqueOrThrow({ where: { id: loser.id } })
-  expect(unchanged).toMatchObject({ tableId, startsAt: loser.startsAt, endsAt: loser.endsAt })
+  expect(unchanged).toMatchObject({ restaurantId: 'default', tableId, startsAt: loser.startsAt, endsAt: loser.endsAt })
 })
 
 test('22:00 Bangkok is stored as 15:00 UTC when the restaurant closes later', async () => {
-  const previous = process.env.BOOKING_CLOSE
-  process.env.BOOKING_CLOSE = '23:59'
-  const lateApp = buildApp({ db })
-  if (previous === undefined) delete process.env.BOOKING_CLOSE
-  else process.env.BOOKING_CLOSE = previous
+  const restaurant = await db.restaurant.create({ data: { slug: 'late-' + randomUUID().slice(0, 12), name: 'Late', closeTime: '23:59' } })
   try {
+    await db.diningTable.create({ data: { restaurantId: restaurant.id, number: 1, qrToken: randomUUID(), capacity: 10 } })
     const start = Date.parse(date + 'T22:00:00+07:00')
-    const response = await create(start, 10, randomUUID(), lateApp)
+    const response = await create(start, 10, randomUUID(), restaurant.slug)
     expect(response.statusCode).toBe(201)
     expect(response.json().startsAt).toBe(date + 'T15:00:00.000Z')
     const stored = await db.reservation.findUniqueOrThrow({ where: { code: response.json().code } })
     expect(config.localParts(stored.startsAt.getTime()).day).toBe(date)
-    const listed = await app.inject({ url: `/staff/reservations?date=${date}`, headers: { 'x-kitchen-api-key': key } })
+    const listed = await app.inject({ url: `/staff/reservations?date=${date}`, headers: { 'x-kitchen-api-key': key, 'x-restaurant-id': restaurant.id } })
     expect(listed.json()).toContainEqual(expect.objectContaining({ id: stored.id, startsAt: date + 'T15:00:00.000Z' }))
   } finally {
-    await lateApp.close()
+    await db.reservation.deleteMany({ where: { restaurantId: restaurant.id } })
+    await db.diningTable.deleteMany({ where: { restaurantId: restaurant.id } })
+    await db.idempotencyRecord.deleteMany({ where: { key: { startsWith: 'restaurant-booking:[' + JSON.stringify(restaurant.id) + ',' } } })
+    await db.restaurant.delete({ where: { id: restaurant.id } })
   }
 })
 
 test('staff listing is protected and stale or illegal transitions return 409', async () => {
   const booking = await db.reservation.create({ data: record(tableId, start, end) })
-  const headers = { 'x-kitchen-api-key': key }
+  const headers = { 'x-kitchen-api-key': key, 'x-restaurant-id': 'default' }
   const list = '/staff/reservations?date=' + date
   const url = `/staff/reservations/${booking.id}/status`
   const setStatus = (status: string) => app.inject({ method: 'PATCH', url, headers, payload: { status } })
@@ -282,7 +282,7 @@ afterAll(async () => {
 })
 
 function record(id: string, startsAt: number, endsAt: number) {
-  return { tableId: id, startsAt: new Date(startsAt), endsAt: new Date(endsAt), guestName: run, partySize: 6, phone: '0800000000', code: randomUUID() }
+  return { restaurantId: 'default', tableId: id, startsAt: new Date(startsAt), endsAt: new Date(endsAt), guestName: run, partySize: 6, phone: '0800000000', code: randomUUID() }
 }
 
 async function availability(size: number, day = date) {
@@ -294,7 +294,7 @@ async function availability(size: number, day = date) {
 test('availability accounts for overlapping bookings and party size', async () => {
   const tables = await db.diningTable.findMany({ where: { active: true, capacity: { gte: 6 } } })
   const small = await db.diningTable.create({ data: {
-    number: randomInt(1_000_000_000, 2_000_000_000), qrToken: randomBytes(24).toString('base64url'), capacity: 2,
+    restaurantId: 'default', number: randomInt(1_000_000_000, 2_000_000_000), qrToken: randomBytes(24).toString('base64url'), capacity: 2,
   } })
   try {
     await db.reservation.createMany({ data: tables.map(table => record(table.id, start, end)) })

@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BackendError } from "@/lib/api";
+import { isRestaurantUnavailable } from "@/lib/restaurant-api";
+import { RestaurantUnavailable } from "@/app/restaurant-unavailable";
 import { customerPath, getCustomerTable } from "@/lib/pos-api";
 import { baht } from "@/lib/pos-schema";
 import { ThemeToggle } from "../../theme-toggle";
@@ -21,17 +23,20 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
   const paramsQuery = await searchParams;
   const query = z.uuid().safeParse(paramsQuery.orderId);
   const showingOrders = paramsQuery.view === "orders" || (paramsQuery.view === undefined && query.success);
-  const { tableNumber, sessionId, menu, order, submittedOrders, sessionTotalMinor, sessionEnded } = await getCustomerTable(token).catch(error => {
+  const data = await getCustomerTable(token).catch(error => {
+    if (isRestaurantUnavailable(error)) return null;
     if (error instanceof BackendError && error.status === 404) notFound();
     throw error;
   });
+  if (!data) return <RestaurantUnavailable />;
+  const { tableNumber, restaurantName, sessionId, menu, order, submittedOrders, sessionTotalMinor, sessionEnded } = data;
 
   if (!sessionId || (paramsQuery.session !== undefined && paramsQuery.session !== sessionId)) {
     const ended = sessionEnded || typeof paramsQuery.session === "string";
     return (
       <div data-customer className="mx-auto max-w-md px-4 py-10">
         <Card className="gap-4 rounded-2xl p-5">
-          <h1 className="text-2xl font-semibold">Join Table {tableNumber}</h1>
+          <h1 className="text-2xl font-semibold">{restaurantName} · Join Table {tableNumber}</h1>
           {ended && <p role="status" className="font-medium">This dining session has ended.</p>}
           <p className="text-sm text-muted-foreground">Ask staff for the current join code. Everyone using that code shares one cart.</p>
           <JoinTable token={token} />
@@ -54,7 +59,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
     <div data-customer className="pb-28">
       <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-8">
-          <h1 className="text-xl font-semibold tracking-tight">Table {tableNumber}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{restaurantName} · Table {tableNumber}</h1>
           <ThemeToggle />
         </div>
       </header>

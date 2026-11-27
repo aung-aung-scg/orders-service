@@ -29,11 +29,11 @@ export async function registerStaffMenuImages(app: FastifyInstance, db: PrismaCl
     limits: { fileSize: menuImageMaxBytes + 1, files: 1, fields: 1 },
   })
 
-  async function replace(id: string, imageKey: string | null) {
-    const previous = await db.menuItem.findUnique({ where: { id } })
+  async function replace(id: string, restaurantId: string, imageKey: string | null) {
+    const previous = await db.menuItem.findUnique({ where: { id, restaurantId } })
     if (!previous) throw new HttpError(404, 'MENU_ITEM_NOT_FOUND', 'Menu item not found')
     const [item] = await db.menuItem.updateManyAndReturn({
-      where: { id, imageKey: previous.imageKey },
+      where: { id, restaurantId, imageKey: previous.imageKey },
       data: { imageKey },
     })
     if (!item) throw new HttpError(409, 'IMAGE_CONFLICT', 'The image changed. Try again.')
@@ -61,7 +61,7 @@ export async function registerStaffMenuImages(app: FastifyInstance, db: PrismaCl
 
     const key = randomUUID() + '.webp'
     await storage.save(key, image)
-    const { item, previousKey } = await replace(request.params.id, key).catch(async error => {
+    const { item, previousKey } = await replace(request.params.id, request.restaurant.id, key).catch(async error => {
       await storage.delete(key).catch(err => request.log.error({ err }, 'Could not clean up menu image'))
       throw error
     })
@@ -70,7 +70,7 @@ export async function registerStaffMenuImages(app: FastifyInstance, db: PrismaCl
   })
 
   app.delete<{ Params: { id: string } }>('/staff/menu/:id/image', async request => {
-    const { item, previousKey } = await replace(request.params.id, null)
+    const { item, previousKey } = await replace(request.params.id, request.restaurant.id, null)
     if (previousKey) await storage.delete(previousKey).catch(err => request.log.error({ err }, 'Could not remove menu image'))
     return item
   })

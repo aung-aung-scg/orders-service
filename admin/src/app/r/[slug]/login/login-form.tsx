@@ -3,10 +3,10 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { login } from "./actions";
+import { login } from "@/app/login/actions";
 
-export function LoginForm({ next }: { next: string }) {
-  const [state, action, pending] = useActionState(login, {});
+export function LoginForm({ slug, next }: { slug: string; next: string }) {
+  const [state, action, pending] = useActionState(login.bind(null, slug), {});
   return (
     <form action={action} className="space-y-4 text-sm">
       <input type="hidden" name="next" value={next} />

@@ -4,7 +4,7 @@ import { buildApp } from '../src/app.js'
 import { createDb } from '../src/lib/db.js'
 
 const db = createDb()
-const kitchenHeaders = { 'x-kitchen-api-key': randomUUID() }
+const kitchenHeaders = { 'x-kitchen-api-key': randomUUID(), 'x-restaurant-id': 'default' }
 const app = buildApp({ db, kitchenApiKey: kitchenHeaders['x-kitchen-api-key'] })
 let tableId: string
 let menuItemId: string
@@ -33,7 +33,7 @@ function getCart(headers = guestHeaders) {
 
 beforeEach(async () => {
   const qrToken = randomBytes(24).toString('base64url')
-  const table = await db.diningTable.create({ data: { qrToken, number: -randomBytes(4).readUInt32BE() % 2147483647 } })
+  const table = await db.diningTable.create({ data: { restaurantId: 'default', qrToken, number: -randomBytes(4).readUInt32BE() % 2147483647 } })
   tableId = table.id
   url = '/t/' + qrToken
   const seating = await reset(null)
@@ -42,7 +42,7 @@ beforeEach(async () => {
   expect(joined.statusCode).toBe(200)
   sessionId = joined.json().sessionId
   guestHeaders = sessionHeaders(joined.json())
-  const menu = await db.menuItem.create({ data: { name: 'Test ' + randomUUID(), priceMinor: 1250 } })
+  const menu = await db.menuItem.create({ data: { restaurantId: 'default', name: 'Test ' + randomUUID(), priceMinor: 1250 } })
   menuItemId = menu.id
 })
 
@@ -121,7 +121,7 @@ test('concurrent submits with the same key return one ticket', async () => {
 })
 
 test('submitting an empty order returns a conflict', async () => {
-  const empty = await db.tableOrder.create({ data: { tableId, sessionId } })
+  const empty = await db.tableOrder.create({ data: { restaurantId: 'default', tableId, sessionId } })
   const response = await submit(randomUUID(), { cartId: empty.id, version: empty.version })
   expect(response.statusCode).toBe(409)
   expect(response.json()).toMatchObject({ code: 'EMPTY_ORDER' })
@@ -199,7 +199,7 @@ test('session history shares submitted snapshots, updates status, and excludes c
   expect((await getCart({})).json()).toMatchObject({ submittedOrders: [], sessionTotalMinor: 0 })
 
   const other = await db.diningTable.create({ data: {
-    number: -randomBytes(4).readUInt32BE() % 2147483647, qrToken: randomBytes(24).toString('base64url'),
+    restaurantId: 'default', number: -randomBytes(4).readUInt32BE() % 2147483647, qrToken: randomBytes(24).toString('base64url'),
   } })
   try {
     const response = await app.inject({ url: '/t/' + other.qrToken + '?orderId=' + first, headers: secondDiner })

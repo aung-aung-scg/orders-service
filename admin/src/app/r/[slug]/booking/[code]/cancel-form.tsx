@@ -3,10 +3,10 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { cancelGuestBooking } from "../../booking-actions";
+import { cancelGuestBooking } from "@/app/booking-actions";
 
-export function CancelForm({ code }: { code: string }) {
-  const [state, action, pending] = useActionState(cancelGuestBooking.bind(null, code), {});
+export function CancelForm({ slug, code }: { slug: string; code: string }) {
+  const [state, action, pending] = useActionState(cancelGuestBooking.bind(null, slug, code), {});
   return (
     <Dialog>
       <DialogTrigger asChild><Button variant="outline">Cancel reservation</Button></DialogTrigger>
