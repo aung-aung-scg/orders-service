@@ -1,6 +1,8 @@
+import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { adminRoles, requireRole } from "@/lib/auth";
 import { listMenu } from "@/lib/menu-api";
+import { menuImagePath } from "@/lib/menu-image";
 import { baht } from "@/lib/pos-schema";
 import { AvailabilitySwitch, MenuEditor } from "./controls";
 
@@ -20,7 +22,11 @@ export default async function MenuPage() {
               <li key={item.id}>
                 <Card className="gap-4 rounded-2xl p-4 shadow-sm">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h2 className="min-w-0 wrap-break-word font-semibold">{item.name}</h2>
+                    <div className="flex min-w-0 items-center gap-3">
+                      {menuImagePath(item.imageKey) && <Image src={menuImagePath(item.imageKey)!} alt={item.name}
+                        width={48} height={48} unoptimized className="size-12 rounded-lg object-cover" />}
+                      <h2 className="min-w-0 wrap-break-word font-semibold">{item.name}</h2>
+                    </div>
                     <p className="font-semibold tabular-nums">{baht(item.priceMinor)}</p>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">

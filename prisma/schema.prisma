@@ -132,6 +132,7 @@ model MenuItem {
   name      String
   priceMinor Int
   available Boolean          @default(true)
+  imageKey  String?
   lines     TableOrderItem[]
 }
 
