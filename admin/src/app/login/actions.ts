@@ -23,7 +23,7 @@ setInterval(() => {
 }, 60_000).unref();
 
 function destination(value: FormDataEntryValue | null, role: StaffRole) {
-  const fallback = role === "ADMIN" ? "/products" : "/kitchen";
+  const fallback = role === "ADMIN" ? "/menu" : "/kitchen";
   if (typeof value !== "string" || !value.startsWith("/") || value.length > 2048) return fallback;
   try {
     const origin = "https://orders-admin.invalid";
@@ -33,7 +33,7 @@ function destination(value: FormDataEntryValue | null, role: StaffRole) {
     if (target.origin !== origin || !/^\/(?!\/)/.test(decodeURIComponent(target.pathname)) || target.pathname === "/login") {
       return fallback;
     }
-    if (role === "KITCHEN" && !/^\/kitchen(?:\/|$)/.test(target.pathname)) return fallback;
+    if (role === "KITCHEN" && target.pathname !== "/reservations" && !/^\/(?:kitchen|table-sessions)(?:\/|$)/.test(target.pathname)) return fallback;
     return target.pathname + target.search + target.hash;
   } catch {
     return fallback;

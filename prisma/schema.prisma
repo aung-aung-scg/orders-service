@@ -74,11 +74,57 @@ enum TableOrderStatus {
 }
 
 model DiningTable {
+  sessions DiningSession[]
+  capacity Int @default(4)
+  reservations Reservation[]
   id      String       @id @default(uuid())
   number  Int          @unique
   qrToken String       @unique
   active  Boolean      @default(true)
   orders  TableOrder[]
+}
+
+model DiningSession {
+  id             String      @id @default(uuid())
+  tableId        String
+  joinCode       String      @unique
+  accessToken    String      @unique
+  startedBy      String
+  createdAt      DateTime    @default(now())
+  endedAt        DateTime?
+  endedBy        String?
+  overrideReason String?
+  table          DiningTable @relation(fields: [tableId], references: [id])
+  orders         TableOrder[]
+
+  @@index([tableId])
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Reservation {
+  id        String            @id @default(uuid())
+  tableId   String
+  partySize Int
+  startsAt  DateTime          @db.Timestamptz(3)
+  endsAt    DateTime          @db.Timestamptz(3)
+  status    ReservationStatus @default(CONFIRMED)
+  guestName String
+  phone     String
+  email     String?
+  notes     String?
+  code      String            @unique
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  table     DiningTable       @relation(fields: [tableId], references: [id])
+
+  @@index([startsAt])
 }
 
 model MenuItem {
@@ -90,6 +136,9 @@ model MenuItem {
 }
 
 model TableOrder {
+  version     Int              @default(0)
+  sessionId   String?
+  session     DiningSession?   @relation(fields: [sessionId], references: [id])
   id          String           @id @default(uuid())
   tableId     String
   status      TableOrderStatus @default(OPEN)

@@ -5,7 +5,8 @@ import { createDb } from '../src/lib/db.js'
 
 const db = createDb()
 const secret = 'integration-secret'
-const app = buildApp({ db, webhookSecret: secret })
+const demoKey = randomUUID()
+const app = buildApp({ db, webhookSecret: secret, stockDemo: true, kitchenApiKey: demoKey })
 afterAll(async () => {
   await app.close()
   await db.$disconnect()
@@ -55,7 +56,7 @@ test('an early payment is stored and applied when the order is created', async (
   const response = await app.inject({
     method: 'POST',
     url: '/orders',
-    headers: { 'idempotency-key': randomUUID() },
+    headers: { 'x-kitchen-api-key': demoKey, 'idempotency-key': randomUUID() },
     payload: { id: event.orderId, items: [{ productId: product.id, quantity: 1 }] },
   })
   expect(response.statusCode).toBe(201)
