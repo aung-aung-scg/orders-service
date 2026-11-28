@@ -1,5 +1,8 @@
 "use server";
 
+import { backendText, text } from "@/i18n/server-text";
+import { getLocale } from "next-intl/server";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -22,7 +25,7 @@ const guestFields = z.object({
 
 export async function verifyGuestBooking(slug: string, code: string, _state: BookingState, form: FormData): Promise<BookingState> {
   const phone = phoneInput.safeParse(form.get("phone"));
-  if (!phone.success) return { error: "Enter the phone number used to book." };
+  if (!phone.success) return { error: await text("booking.enterThePhoneNumberUsedToBook") };
   try {
     await verifyBooking(slug, code, phone.data);
   } catch (error) {
@@ -37,11 +40,12 @@ export type BookingLookupState = BookingState & { bookings?: {
 
 export async function lookupGuestBookings(slug: string, _state: BookingLookupState, form: FormData): Promise<BookingLookupState> {
   const phone = phoneInput.safeParse(form.get("phone"));
-  if (!phone.success) return { error: "Enter the phone number used to book." };
+  if (!phone.success) return { error: await text("booking.enterThePhoneNumberUsedToBook") };
   try {
     const [{ timezone }, rows] = await Promise.all([getRestaurant(slug), findBookings(slug, phone.data)]);
+    const locale = await getLocale();
     return { bookings: rows.map(row => ({
-      code: row.code, date: bookingDate(row.startsAt, timezone), time: bookingTime(row.startsAt, timezone),
+      code: row.code, date: bookingDate(row.startsAt, timezone, locale), time: bookingTime(row.startsAt, timezone, locale),
       guests: row.partySize, table: row.table.number,
     })) };
   } catch (error) {
@@ -51,7 +55,7 @@ export async function lookupGuestBookings(slug: string, _state: BookingLookupSta
 
 export async function moveGuestBooking(slug: string, code: string, revision: string, _state: BookingState, form: FormData): Promise<BookingState> {
   const startsAt = z.iso.datetime().safeParse(form.get("startsAt"));
-  if (!startsAt.success) return { error: "Choose a reservation time." };
+  if (!startsAt.success) return { error: await text("errors.chooseAReservationTime") };
   try {
     await rescheduleBooking(slug, code, revision, startsAt.data);
   } catch (error) {
@@ -62,9 +66,9 @@ export async function moveGuestBooking(slug: string, code: string, revision: str
   redirect(bookingPath(slug, code));
 }
 
-function feedback(error: unknown): BookingState {
-  if (error instanceof BackendError && error.status < 500) return { error: error.backendMessage };
-  return { error: "The booking service is unavailable. Try again shortly." };
+async function feedback(error: unknown): Promise<BookingState> {
+  if (error instanceof BackendError && error.status < 500) return { error: await backendText(error) };
+  return { error: await text("errors.theBookingServiceIsUnavailableTryAgain") };
 }
 
 export async function submitBooking(slug: string, startsAt: string, partySize: number, _state: BookingState, form: FormData): Promise<BookingState> {
@@ -72,7 +76,7 @@ export async function submitBooking(slug: string, startsAt: string, partySize: n
     guestName: form.get("guestName"), phone: form.get("phone"), email: form.get("email"),
     notes: form.get("notes"), key: form.get("key"),
   });
-  if (!fields.success) return { error: "Check your name, phone number, and optional email and notes." };
+  if (!fields.success) return { error: await text("errors.checkYourNamePhoneNumberAndOptional") };
   const { key, guestName, phone, email, notes } = fields.data;
   let code: string;
   try {
@@ -80,7 +84,7 @@ export async function submitBooking(slug: string, startsAt: string, partySize: n
   } catch (error) {
     if (error instanceof BackendError && error.code === "SLOT_UNAVAILABLE") {
       revalidatePath("/book");
-      return { error: "That time is no longer available. Pick another time from the updated slots." };
+      return { error: await text("errors.thatTimeIsNoLongerAvailablePick") };
     }
     return feedback(error);
   }

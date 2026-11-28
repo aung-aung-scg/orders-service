@@ -1,5 +1,6 @@
 "use server";
 
+import { backendText, text } from "@/i18n/server-text";
 import { revalidatePath } from "next/cache";
 import { BackendError } from "@/lib/api";
 import { adminRoles, requireRole } from "@/lib/auth";
@@ -14,8 +15,8 @@ function refreshMenu() {
   revalidatePath("/t/[token]", "page");
 }
 
-function message(error: unknown) {
-  return error instanceof BackendError && error.status < 500 ? error.backendMessage : "Couldn’t save the menu item. Try again.";
+async function message(error: unknown) {
+  return error instanceof BackendError && error.status < 500 ? await backendText(error) : await text("menu.couldnTSaveTheMenuItemTry");
 }
 
 export async function submitMenuItem(id: string | undefined, state: MenuState, form: FormData): Promise<MenuState> {
@@ -24,28 +25,28 @@ export async function submitMenuItem(id: string | undefined, state: MenuState, f
   const name = typeof rawName === "string" ? rawName.trim() : "";
   const rawPrice = form.get("price");
   const priceMinor = typeof rawPrice === "string" ? parseMenuPrice(rawPrice) : null;
-  const nameError = name.length < 1 || name.length > 80 ? "Enter a name of 1 to 80 characters." : undefined;
+  const nameError = name.length < 1 || name.length > 80 ? await text("menu.enterANameOf1To80") : undefined;
   if (nameError || priceMinor === null) {
-    return { itemId: state.itemId, name: nameError, price: priceMinor === null ? "Enter a THB price with up to seven digits and two decimal places." : undefined };
+    return { itemId: state.itemId, name: nameError, price: priceMinor === null ? await text("menu.enterAThbPriceWithUpTo") : undefined };
   }
   const selected = form.get("image");
   const image = selected instanceof File && selected.size > 0 ? selected : undefined;
   if (image && image.size > menuImageMaxBytes) {
-    return { itemId: state.itemId, image: "Choose an image no larger than 2 MB." };
+    return { itemId: state.itemId, image: await text("menu.chooseAnImageNoLargerThan2") };
   }
   let itemId = id ?? state.itemId;
   try {
     const item = await saveMenuItem({ name, priceMinor }, itemId);
     itemId = item.id;
   } catch (error) {
-    return { itemId, error: message(error) };
+    return { itemId, error: await message(error) };
   }
   try {
     if (image || form.get("removeImage") === "yes") await saveMenuImage(itemId, image);
   } catch (error) {
     refreshMenu();
-    return { itemId, image: "Item details saved. " + (error instanceof BackendError && error.status < 500
-      ? error.backendMessage : "The image change failed. Try again.") };
+    return { itemId, image: await text("menu.itemDetailsSavedError", { error: error instanceof BackendError && error.status < 500
+      ? await backendText(error) : await text("menu.theImageChangeFailedTryAgain") }) };
   }
   refreshMenu();
   return { saved: true };
@@ -56,7 +57,7 @@ export async function toggleMenuItem(id: string, available: boolean): Promise<Me
   try {
     await saveMenuItem({ available }, id);
   } catch (error) {
-    return { error: message(error) };
+    return { error: await message(error) };
   }
   refreshMenu();
   return {};

@@ -1,5 +1,6 @@
 "use server";
 
+import { backendText, text } from "@/i18n/server-text";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -17,15 +18,15 @@ const addFields = z.object({
   note: z.string().trim().max(500),
 });
 
-function failure(error: unknown): PosState {
-  if (error instanceof BackendError && error.status < 500) return { error: error.backendMessage };
+async function failure(error: unknown): Promise<PosState> {
+  if (error instanceof BackendError && error.status < 500) return { error: await backendText(error) };
   console.error("Customer or kitchen order request failed");
-  return { error: "The request failed. Try again." };
+  return { error: await text("errors.theRequestFailedTryAgain") };
 }
 
 export async function joinTable(token: string, _state: PosState, form: FormData): Promise<PosState> {
   const code = z.string().trim().toUpperCase().regex(/^[0-9A-F]{10}$/).safeParse(form.get("code"));
-  if (!code.success) return { error: "Enter the 10-character code from staff." };
+  if (!code.success) return { error: await text("errors.enterThe10CharacterCodeFromStaff") };
   let sessionId: string;
   try {
     sessionId = await joinDiningSession(token, code.data);
@@ -37,7 +38,7 @@ export async function joinTable(token: string, _state: PosState, form: FormData)
 
 export async function addCartItem(token: string, sessionId: string, menuItemId: string, _state: PosState, form: FormData): Promise<PosState> {
   const fields = addFields.safeParse({ menuItemId, quantity: form.get("quantity"), note: form.get("note") });
-  if (!fields.success) return { error: "Enter a quantity from 1 to 20 and use at most 500 characters for the note." };
+  if (!fields.success) return { error: await text("errors.enterAQuantityFrom1To20") };
   try {
     const { note, ...item } = fields.data;
     await addTableItem(token, sessionId, { ...item, note: note || undefined });
@@ -50,7 +51,7 @@ export async function addCartItem(token: string, sessionId: string, menuItemId: 
 
 export async function updateCartItem(token: string, sessionId: string, itemId: string, _state: PosState, form: FormData): Promise<PosState> {
   const quantity = quantityField.safeParse(form.get("quantity"));
-  if (!quantity.success) return { error: "Enter a quantity from 0 to 20." };
+  if (!quantity.success) return { error: await text("errors.enterAQuantityFrom0To20") };
   try {
     await changeTableItem(token, sessionId, itemId, quantity.data);
   } catch (error) {
@@ -62,13 +63,13 @@ export async function updateCartItem(token: string, sessionId: string, itemId: s
 
 export async function placeTableOrder(token: string, sessionId: string, cartId: string, version: number, _state: PosState, form: FormData): Promise<PosState> {
   const key = z.uuid().safeParse(form.get("key"));
-  if (!key.success) return { error: "Reload the page and try again." };
+  if (!key.success) return { error: await text("errors.reloadThePageAndTryAgain") };
   let orderId: string;
   try {
     orderId = (await submitTableOrder(token, sessionId, key.data, cartId, version)).id;
   } catch (error) {
     if (error instanceof BackendError && error.code === "CART_CHANGED") {
-      return { error: error.backendMessage, cartChanged: true };
+      return { error: await backendText(error), cartChanged: true };
     }
     return failure(error);
   }
@@ -79,7 +80,7 @@ export async function placeTableOrder(token: string, sessionId: string, cartId: 
 export async function advanceTicket(id: string, status: string): Promise<PosState> {
   await requireRole(kitchenRoles, { next: "/kitchen" });
   const fields = z.object({ id: z.uuid(), status: z.enum(["PREPARING", "READY", "SERVED", "CANCELLED"]) }).safeParse({ id, status });
-  if (!fields.success) return { error: "Invalid ticket or status." };
+  if (!fields.success) return { error: await text("errors.invalidTicketOrStatus") };
   try {
     await setTicketStatus(fields.data.id, fields.data.status);
     return {};

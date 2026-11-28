@@ -14,8 +14,8 @@ export function bookingDayAfter(day: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-export const bookingTime = (value: string, timeZone: string) =>
-  new Intl.DateTimeFormat("en-GB", { timeZone, timeStyle: "short" }).format(new Date(value));
-export const bookingDate = (value: string, timeZone: string) =>
-  new Intl.DateTimeFormat("en-GB", { timeZone, dateStyle: "full" }).format(new Date(value));
+export const bookingTime = (value: string, timeZone: string, locale = "en-GB") =>
+  new Intl.DateTimeFormat(locale, { timeZone, timeStyle: "short" }).format(new Date(value));
+export const bookingDate = (value: string, timeZone: string, locale = "en-GB") =>
+  new Intl.DateTimeFormat(locale, { timeZone, dateStyle: "full" }).format(new Date(value));
 export const bookingStarted = (value: string) => Date.parse(value) <= Date.now();

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { CircleAlert } from "lucide-react";
@@ -15,6 +16,7 @@ export function WorkspaceEmpty({ title, detail, children }: { title: string; det
 }
 
 export function WorkspaceLoadError({ message, reset }: { message: string; reset?: () => void }) {
+  const t = useTranslations();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   return <Card className="items-start gap-3 p-5">
@@ -23,10 +25,11 @@ export function WorkspaceLoadError({ message, reset }: { message: string; reset?
     <Button variant="outline" size="sm" disabled={pending} onClick={() => startTransition(() => {
       if (reset) reset();
       router.refresh();
-    })}>{pending ? "Retrying…" : "Try again"}</Button>
+    })}>{pending ? t("common.retrying") : t("common.tryAgain")}</Button>
   </Card>;
 }
 
 export default function WorkspaceError({ reset }: { reset: () => void }) {
-  return <WorkspaceLoadError message="Couldn’t load this page." reset={reset} />;
+  const t = useTranslations();
+  return <WorkspaceLoadError message={t("common.couldnTLoadThisPage")} reset={reset} />;
 }

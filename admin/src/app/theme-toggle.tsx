@@ -1,10 +1,12 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
+  const t = useTranslations();
   useEffect(() => {
     try {
       const theme = localStorage.getItem("orders-theme");
@@ -23,7 +25,7 @@ export function ThemeToggle() {
   }
 
   return (
-    <Button type="button" size="icon" variant="ghost" aria-label="Toggle color theme" onClick={toggle}>
+    <Button type="button" size="icon" variant="ghost" aria-label={t("common.toggleColorTheme")} onClick={toggle}>
       <Moon className="dark:hidden" /><Sun className="hidden dark:block" />
     </Button>
   );

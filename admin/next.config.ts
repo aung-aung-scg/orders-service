@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
   experimental: { serverActions: { bodySizeLimit: "3mb" } },
 };
 
-export default nextConfig;
+export default createNextIntlPlugin()(nextConfig);

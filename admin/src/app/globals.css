@@ -43,7 +43,7 @@ html[data-theme="dark"], html:not([data-theme]):has([data-kitchen]) {
 }
 
 @theme inline {
-  --font-sans: var(--font-geist);
+  --font-sans: var(--font-geist), "Noto Sans Thai", "Noto Sans JP", "Noto Sans Myanmar", sans-serif;
   --font-heading: var(--font-geist);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -64,6 +64,10 @@ html[data-theme="dark"], html:not([data-theme]):has([data-kitchen]) {
   --color-input: var(--input);
   --color-ring: var(--ring);
 }
+
+html[lang="th"] body { font-family: "Noto Sans Thai", var(--font-sans); }
+html[lang="ja"] body { font-family: "Noto Sans JP", var(--font-sans); }
+html[lang="my"] body { font-family: "Noto Sans Myanmar", var(--font-sans); line-height: 1.65; }
 
 @layer base {
   * { @apply border-border; }

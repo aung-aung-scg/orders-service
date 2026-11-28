@@ -16,12 +16,13 @@ export const submittedOrder = z.object({
 });
 export type SubmittedOrder = z.infer<typeof submittedOrder>;
 export const orderLabels: Record<SubmittedOrder["status"], string> = {
-  SUBMITTED: "Received", PREPARING: "Preparing", READY: "Ready", SERVED: "Served", CANCELLED: "Cancelled",
+  SUBMITTED: "customer.received", PREPARING: "kitchen.preparing", READY: "kitchen.ready", SERVED: "customer.served", CANCELLED: "customer.cancelled",
 };
 export const customerTable = z.object({
   sessionId: z.uuid().nullable(),
   tableNumber: z.number().int(),
   restaurantName: z.string(),
+  restaurantTimezone: z.string().default("Asia/Bangkok"),
   menu: z.array(z.object({ id: z.string(), name: z.string(), priceMinor: z.number().int(), imageKey: z.string().nullish() })),
   order: tableOrder.nullable(),
   ticket: ticketStatus.nullable(),
@@ -40,8 +41,8 @@ export const tickets = z.array(z.object({
 export type Ticket = z.infer<typeof tickets>[number];
 export type CustomerTable = z.infer<typeof customerTable>;
 
-const thbFormatter = new Intl.NumberFormat("en-TH", { style: "currency", currency: "THB" });
 
-export function baht(satang: number) {
-  return thbFormatter.format(satang / 100);
+
+export function baht(satang: number, locale = "en-TH") {
+  return new Intl.NumberFormat(locale, { style: "currency", currency: "THB" }).format(satang / 100);
 }

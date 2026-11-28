@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormatter, useTranslations } from "next-intl";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { ArrowRight, Clock3, Volume2, VolumeX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -9,19 +10,20 @@ import { advanceTicket } from "@/app/pos-actions";
 import { tickets as ticketSchema, type Ticket } from "@/lib/pos-schema";
 
 const columns = [
-  { status: "SUBMITTED", label: "New", next: "PREPARING", button: "Start preparing" },
-  { status: "PREPARING", label: "Preparing", next: "READY", button: "Mark ready" },
-  { status: "READY", label: "Ready", next: "SERVED", button: "Mark served" },
+  { status: "SUBMITTED", label: "kitchen.new", next: "PREPARING", button: "kitchen.startPreparing" },
+  { status: "PREPARING", label: "kitchen.preparing", next: "READY", button: "kitchen.markReady" },
+  { status: "READY", label: "kitchen.ready", next: "SERVED", button: "kitchen.markServed" },
 ] as const;
 
 function StatusButton({ id, status, label }: { id: string; status: string; label: string }) {
+  const t = useTranslations();
   const [state, action, pending] = useActionState(advanceTicket.bind(null, id, status), {});
   const cancel = status === "CANCELLED";
   return (
     <form action={action}>
       <Button variant={cancel ? "ghost" : "default"} size={cancel ? "sm" : "lg"}
         className={cancel ? "w-full text-muted-foreground" : "h-11 w-full justify-between"}
-        disabled={pending}>{pending ? "Updating…" : label}{!cancel && <ArrowRight />}</Button>
+        disabled={pending}>{pending ? t("kitchen.updating") : label}{!cancel && <ArrowRight />}</Button>
       {state.error && <p className="mt-2 text-sm text-destructive" role="alert">{state.error}</p>}
     </form>
   );
@@ -41,14 +43,17 @@ function chirp(audio: AudioContext | null) {
 }
 
 function Age({ now, submittedAt }: { now?: number; submittedAt: string }) {
+  const t = useTranslations();
   const minutes = now === undefined ? 0 : Math.max(0, Math.floor((now - Date.parse(submittedAt)) / 60000));
   const color = minutes < 5 ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" :
     minutes < 10 ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200" :
       "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200";
-  return <Badge className={color}><Clock3 /> {now === undefined ? "—" : `${minutes} min`}</Badge>;
+  return <Badge className={color}><Clock3 /> {now === undefined ? "—" : t("kitchen.p0Min", { p0: minutes })}</Badge>;
 }
 
 export function KitchenBoard({ initialTickets }: { initialTickets: Ticket[] }) {
+  const t = useTranslations();
+  const format = useFormatter();
   const [tickets, setTickets] = useState(initialTickets);
   const [reconnecting, setReconnecting] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -156,14 +161,14 @@ export function KitchenBoard({ initialTickets }: { initialTickets: Ticket[] }) {
   return (
     <>
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Kitchen</h1>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{t("common.kitchen")}</h1>
         <div className="flex items-center gap-2">
           <Badge variant="outline" role="status" className="px-2.5 py-1.5">
             <span aria-hidden="true" className={`size-2 rounded-full ${connected && !reconnecting ? "bg-emerald-500" : "bg-amber-500"}`} />
-            {reconnecting ? "Reconnecting" : connected ? "Live" : "Connecting"}
+            {reconnecting ? t("kitchen.reconnecting") : connected ? t("kitchen.live") : t("kitchen.connecting")}
           </Badge>
-          <Button type="button" variant="outline" aria-label="New ticket sound" aria-pressed={sound} onClick={toggleSound}>
-            {sound ? <Volume2 /> : <VolumeX />} Sound {sound ? "on" : "off"}
+          <Button type="button" variant="outline" aria-label={t("kitchen.newTicketSound")} aria-pressed={sound} onClick={toggleSound}>
+            {sound ? <Volume2 /> : <VolumeX />}{" "}{t("kitchen.sound")}{" "}{sound ? t("kitchen.on") : t("kitchen.off")}
           </Button>
         </div>
       </header>
@@ -171,24 +176,24 @@ export function KitchenBoard({ initialTickets }: { initialTickets: Ticket[] }) {
         {columns.map(column => {
           const lane = tickets.filter(ticket => ticket.status === column.status);
           return (
-            <section key={column.status} aria-label={column.label} className="min-w-0 space-y-3 rounded-2xl border bg-muted/45 p-3">
+            <section key={column.status} aria-label={t(column.label)} className="min-w-0 space-y-3 rounded-2xl border bg-muted/45 p-3">
               <div className="flex items-center justify-between gap-2 px-1 py-1">
-                <h2 className="text-lg font-semibold">{column.label}</h2>
-                <Badge variant="secondary">{lane.length}</Badge>
+                <h2 className="text-lg font-semibold">{t(column.label)}</h2>
+                <Badge variant="secondary">{format.number(lane.length, "quantity")}</Badge>
               </div>
-              {!lane.length && <p className="rounded-xl border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">No tickets</p>}
+              {!lane.length && <p className="rounded-xl border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">{t("kitchen.noTickets")}</p>}
               {lane.map(ticket => (
                 <article key={ticket.id}>
                   <Card className="gap-4 rounded-2xl p-4 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="min-w-0 wrap-break-word text-2xl font-semibold tracking-tight">Table {ticket.table.number}</h3>
+                      <h3 className="min-w-0 wrap-break-word text-2xl font-semibold tracking-tight">{t("kitchen.table")}{" "}{ticket.table.number}</h3>
                       <Age now={now} submittedAt={ticket.submittedAt} />
                     </div>
-                    {ticket.previousSeating && <Badge variant="outline">Previous seating</Badge>}
+                    {ticket.previousSeating && <Badge variant="outline">{t("kitchen.previousSeating")}</Badge>}
                     <ul className="divide-y border-y">
                       {ticket.items.map(item => (
                         <li key={item.id} className="flex items-start gap-2 py-3 text-sm">
-                          <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 font-semibold tabular-nums">{item.quantity}×</span>
+                          <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 font-semibold tabular-nums">{format.number(item.quantity, "quantity")}×</span>
                           <div className="min-w-0 space-y-1 wrap-break-word">
                             <p className="font-medium">{item.nameSnapshot}</p>
                             {item.note && <p className="text-muted-foreground">{item.note}</p>}
@@ -197,8 +202,8 @@ export function KitchenBoard({ initialTickets }: { initialTickets: Ticket[] }) {
                       ))}
                     </ul>
                     <div className="space-y-1">
-                      <StatusButton id={ticket.id} status={column.next} label={column.button} />
-                      {column.status !== "READY" && <StatusButton id={ticket.id} status="CANCELLED" label="Cancel order" />}
+                      <StatusButton id={ticket.id} status={column.next} label={t(column.button)} />
+                      {column.status !== "READY" && <StatusButton id={ticket.id} status="CANCELLED" label={t("kitchen.cancelOrder")} />}
                     </div>
                   </Card>
                 </article>

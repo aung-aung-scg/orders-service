@@ -1,8 +1,10 @@
+import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoadingTable() {
+  const t = useTranslations();
   return (
-    <div data-customer role="status" aria-label="Loading table menu" className="pb-28">
+    <div data-customer role="status" aria-label={t("customer.loadingTableMenu")} className="pb-28">
       <div className="border-b">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-8">
           <Skeleton className="h-6 w-24 rounded-lg" />

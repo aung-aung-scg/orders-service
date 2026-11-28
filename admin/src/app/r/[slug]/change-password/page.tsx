@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ import { getSession } from "@/lib/auth";
 import { ChangePasswordForm } from "./form";
 
 export default async function ChangePasswordPage({ params }: PageProps<"/r/[slug]/change-password">) {
+  const t = await getTranslations();
   const { slug } = await params;
   const session = await getSession();
   if (!session) redirect("/r/" + encodeURIComponent(slug) + "/login");
@@ -13,9 +15,9 @@ export default async function ChangePasswordPage({ params }: PageProps<"/r/[slug
   if (!session.mustChangePassword) redirect(session.role === "ADMIN" ? "/menu" : "/kitchen");
   return <main className="grid min-h-[70vh] place-items-center px-4">
     <Card className="w-full max-w-sm gap-4 p-6">
-      <h1 className="text-xl font-semibold">Change your temporary password</h1>
+      <h1 className="text-xl font-semibold">{t("auth.changeYourTemporaryPassword")}</h1>
       <ChangePasswordForm slug={slug} />
-      <form action={logout}><Button variant="outline">Sign out</Button></form>
+      <form action={logout}><Button variant="outline">{t("common.signOut")}</Button></form>
     </Card>
   </main>;
 }

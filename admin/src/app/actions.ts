@@ -1,5 +1,6 @@
 "use server";
 
+import { backendText, text } from "@/i18n/server-text";
 import { randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
@@ -23,21 +24,21 @@ function integerField(minimum: number, message: string) {
   );
 }
 
-function formError(error: unknown): FormState {
+async function formError(error: unknown): Promise<FormState> {
   if (error instanceof BackendError && error.status < 500) {
     if (error.status === 409 && error.code === "INSUFFICIENT_STOCK") {
-      return { error: "Insufficient stock for this product. Choose a smaller quantity or another product." };
+      return { error: await text("feedback.insufficientStock") };
     }
-    return { error: error.backendMessage };
+    return { error: await backendText(error) };
   }
   console.error(error);
-  return { error: "The backend could not complete the request." };
+  return { error: await text("errors.theBackendCouldNotCompleteTheRequest") };
 }
 
 export async function addProduct(_previous: FormState, form: FormData): Promise<FormState> {
   await requireRole(adminRoles, { next: "/products" });
   const input = productFields.safeParse({ name: form.get("name") ?? "", stock: form.get("stock") ?? "" });
-  if (!input.success) return { error: input.error.issues.map(issue => issue.message).join(" ") };
+  if (!input.success) return { error: await text("errors.checkTheHighlightedFieldsAndTryAgain") };
 
   try {
     await createProduct(input.data);
@@ -46,13 +47,13 @@ export async function addProduct(_previous: FormState, form: FormData): Promise<
   }
   updateTag(productsTag);
   revalidatePath("/products");
-  return { success: "Product created." };
+  return { success: await text("feedback.productCreated") };
 }
 
 export async function addOrder(_previous: FormState, form: FormData): Promise<FormState> {
   await requireRole(adminRoles, { next: "/orders" });
   const input = orderFields.safeParse({ productId: form.get("productId") ?? "", quantity: form.get("quantity") ?? "" });
-  if (!input.success) return { error: input.error.issues.map(issue => issue.message).join(" ") };
+  if (!input.success) return { error: await text("errors.checkTheHighlightedFieldsAndTryAgain") };
 
   try {
     await createOrder({ items: [input.data] }, randomUUID());
@@ -61,5 +62,5 @@ export async function addOrder(_previous: FormState, form: FormData): Promise<Fo
   }
   updateTag(productsTag);
   revalidatePath("/orders");
-  return { success: "Order created." };
+  return { success: await text("feedback.orderCreated") };
 }

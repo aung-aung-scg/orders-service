@@ -1,5 +1,6 @@
 "use server";
 
+import { backendText, text } from "@/i18n/server-text";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { BackendError, request } from "@/lib/api";
@@ -21,10 +22,10 @@ export async function changeStaffPassword(slug: string, _state: PasswordState, f
   const input = fields.safeParse({
     currentPassword: form.get("currentPassword"), newPassword: form.get("newPassword"), confirmPassword: form.get("confirmPassword"),
   });
-  if (!input.success) return { error: "Enter your temporary password and a new password of at least 10 characters." };
+  if (!input.success) return { error: await text("auth.enterYourTemporaryPasswordAndANew") };
   const { currentPassword, newPassword, confirmPassword } = input.data;
-  if (newPassword !== confirmPassword) return { error: "The new passwords do not match." };
-  if (currentPassword === newPassword) return { error: "Choose a password different from the temporary password." };
+  if (newPassword !== confirmPassword) return { error: await text("auth.theNewPasswordsDoNotMatch") };
+  if (currentPassword === newPassword) return { error: await text("auth.chooseAPasswordDifferentFromTheTemporary") };
   let result;
   try {
     result = await request("/auth/change-password", z.object({ credentialVersion: z.number().int().nonnegative() }), {
@@ -33,7 +34,7 @@ export async function changeStaffPassword(slug: string, _state: PasswordState, f
     });
   } catch (error) {
     if (error instanceof BackendError && error.status === 401) redirect("/r/" + slug + "/login");
-    return { error: error instanceof BackendError && error.status === 400 ? error.backendMessage : "Could not change your password. Try again." };
+    return { error: error instanceof BackendError && error.status === 400 ? await backendText(error) : await text("auth.couldNotChangeYourPasswordTryAgain") };
   }
   await setStaffSession({ ...session, credentialVersion: result.credentialVersion });
   redirect(home);

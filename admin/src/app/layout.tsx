@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
+import "@fontsource/noto-sans-thai/thai-400.css";
+import "@fontsource/noto-sans-jp/400.css";
+import "@fontsource/noto-sans-myanmar/myanmar-400.css";
 import "./globals.css";
 
 const geist = localFont({
@@ -9,16 +14,17 @@ const geist = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Orders admin",
-  description: "Manage inventory and orders",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common");
+  return { title: t("ordersAdmin"), description: t("manageInventoryAndOrders") };
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const locale = await getLocale();
   return (
-    <html lang="en" className={geist.variable} suppressHydrationWarning>
+    <html lang={locale} className={geist.variable} suppressHydrationWarning>
       <body>
-        <main>{children}</main>
+        <NextIntlClientProvider><main>{children}</main></NextIntlClientProvider>
       </body>
     </html>
   );

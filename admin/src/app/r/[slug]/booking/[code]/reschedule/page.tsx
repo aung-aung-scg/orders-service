@@ -1,3 +1,4 @@
+import { getLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 import { publicRestaurant } from "@/lib/restaurant-api";
 import Link from "next/link";
@@ -11,9 +12,13 @@ import { bookingPath, getBooking, rescheduleAvailability } from "@/lib/booking-a
 import { bookingDate, bookingDayAfter, bookingTime, bookingToday } from "@/lib/booking-display";
 import { RescheduleForm } from "./reschedule-form";
 
-export const metadata: Metadata = { title: "Reschedule reservation", referrer: "no-referrer", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations();
+  return { title: t("booking.rescheduleReservation"), referrer: "no-referrer", robots: { index: false } };
+}
 
 export default async function ReschedulePage({ params, searchParams }: PageProps<"/r/[slug]/booking/[code]/reschedule">) {
+  const [locale, t] = await Promise.all([getLocale(), getTranslations()]);
   const { slug, code } = await params;
   const { timezone: bookingZone, maxDaysAhead: maxBookingDays } = await publicRestaurant(slug);
   if (!/^[\w-]{22,80}$/.test(code)) notFound();
@@ -32,22 +37,22 @@ export default async function ReschedulePage({ params, searchParams }: PageProps
   return (
     <section className="mx-auto max-w-lg px-4 py-8 sm:py-12">
       <Card className="gap-4 p-5 sm:p-7">
-        <h1 className="text-2xl font-semibold">Reschedule reservation</h1>
-        <Button asChild variant="link" className="w-fit px-0"><Link href={path}>Back to reservation</Link></Button>
+        <h1 className="text-2xl font-semibold">{t("booking.rescheduleReservation")}</h1>
+        <Button asChild variant="link" className="w-fit px-0"><Link href={path}>{t("booking.backToReservation")}</Link></Button>
         {booking ? (
           <>
-            <p className="text-sm">Current booking: {bookingDate(booking.startsAt, bookingZone)} at {bookingTime(booking.startsAt, bookingZone)}.</p>
-            <p className="text-sm text-muted-foreground">Reschedule before {bookingTime(booking.reschedulingDeadline, bookingZone)} on {bookingDate(booking.reschedulingDeadline, bookingZone)} ({bookingZone}).</p>
+            <p className="text-sm">{t("booking.currentBooking")}{" "}{bookingDate(booking.startsAt, bookingZone, locale)}{" "}{t("booking.at")}{" "}{bookingTime(booking.startsAt, bookingZone, locale)}.</p>
+            <p className="text-sm text-muted-foreground">{t("booking.rescheduleBefore")}{" "}{t("booking.timeOnDate", { time: bookingTime(booking.reschedulingDeadline, bookingZone, locale), date: bookingDate(booking.reschedulingDeadline, bookingZone, locale) })} ({bookingZone}).</p>
             <form method="get" action={path + "/reschedule"} className="flex flex-wrap items-end gap-3">
-              <label className="grid gap-1 text-sm font-medium">New date <Input type="date" name="date" min={today} max={lastDay} defaultValue={date} required /></label>
-              <Button type="submit" variant="outline">Show available times</Button>
+              <label className="grid gap-1 text-sm font-medium">{t("booking.newDate")}{" "}<Input type="date" name="date" min={today} max={lastDay} defaultValue={date} required /></label>
+              <Button type="submit" variant="outline">{t("booking.showAvailableTimes")}</Button>
             </form>
-            {!slots ? <p role="alert" className="text-sm text-destructive">Couldn’t load times. Review your reservation and try again.</p> :
+            {!slots ? <p role="alert" className="text-sm text-destructive">{t("booking.couldnTLoadTimesReviewYourReservation")}</p> :
               slots.length ? <RescheduleForm key={date} slug={slug} code={code} revision={booking.revision} slots={slots.map(slot => ({
-                startsAt: slot.startsAt, label: bookingTime(slot.startsAt, bookingZone), date: bookingDate(slot.startsAt, bookingZone),
-              }))} /> : <p role="status" className="text-sm">No available times on this date. Choose another date.</p>}
+                startsAt: slot.startsAt, label: bookingTime(slot.startsAt, bookingZone, locale), date: bookingDate(slot.startsAt, bookingZone, locale),
+              }))} /> : <p role="status" className="text-sm">{t("booking.noAvailableTimesOnThisDateChoose")}</p>}
           </>
-        ) : <p role="alert">Couldn’t load your reservation. Try again shortly.</p>}
+        ) : <p role="alert">{t("booking.couldnTLoadYourReservationTryAgain")}</p>}
       </Card>
     </section>
   );

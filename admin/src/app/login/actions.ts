@@ -1,5 +1,6 @@
 "use server";
 
+import { text } from "@/i18n/server-text";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -17,7 +18,6 @@ const staff = z.object({
   mustChangePassword: z.boolean(), credentialVersion: z.number().int().nonnegative(),
 });
 type LoginState = { error?: string };
-const invalid = { error: "Unable to sign in. Check your credentials or try again later." };
 const attempts = new Map<string, { count: number; expires: number }>();
 const windowMs = 15 * 60 * 1000;
 
@@ -50,7 +50,7 @@ function destination(value: FormDataEntryValue | null, role: StaffRole, slug: st
 
 export async function login(slug: string, _state: LoginState, form: FormData): Promise<LoginState> {
   const input = credentials.safeParse({ username: form.get("username"), password: form.get("password") });
-  if (!input.success) return invalid;
+  if (!input.success) return { error: await text("auth.unableToSignInCheckYourCredentials") };
 
   const ip = (await headers()).get("x-forwarded-for")?.split(",").at(-1)?.trim() || "unknown";
   const existing = await getSession();
@@ -62,7 +62,7 @@ export async function login(slug: string, _state: LoginState, form: FormData): P
     entry = { count: 0, expires: now + windowMs };
     attempts.set(key, entry);
   }
-  if (entry.count >= 5) return invalid;
+  if (entry.count >= 5) return { error: await text("auth.unableToSignInCheckYourCredentials") };
   entry.count++;
 
   let user: z.infer<typeof staff>;
@@ -74,10 +74,10 @@ export async function login(slug: string, _state: LoginState, form: FormData): P
       headers: { ...kitchenApiKeyHeaders(), "X-Restaurant-Id": restaurant.id, "Content-Type": "application/json" },
       body: JSON.stringify(input.data),
     });
-    if (user.restaurantId !== restaurant.id) return invalid;
+    if (user.restaurantId !== restaurant.id) return { error: await text("auth.unableToSignInCheckYourCredentials") };
   } catch (error) {
     if (!(error instanceof BackendError && error.code === "INVALID_CREDENTIALS")) entry.count--;
-    return invalid;
+    return { error: await text("auth.unableToSignInCheckYourCredentials") };
   }
 
   if (attempts.get(key) === entry) attempts.delete(key);
