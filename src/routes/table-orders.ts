@@ -23,7 +23,7 @@ const withItems = { items: { orderBy: { id: 'asc' } } } as const
 async function findTable(db: Prisma.TransactionClient, qrToken: string) {
   const table = await db.diningTable.findUnique({
     where: { qrToken, active: true },
-    include: { restaurant: { select: { name: true, active: true } } },
+    include: { restaurant: { select: { name: true, active: true, timezone: true } } },
   })
   if (!table) throw new HttpError(404, 'TABLE_NOT_FOUND', 'Table not found')
   if (!table.restaurant.active) throw restaurantUnavailable()
@@ -104,7 +104,8 @@ export function registerTableOrders(app: FastifyInstance, db: PrismaClient, kitc
     const session = await sessionFor(request, table)
     reply.header('Cache-Control', 'no-store')
     const withoutSession = {
-      tableNumber: table.number, restaurantName: table.restaurant.name, sessionId: null, menu: [], order: null, ticket: null,
+      tableNumber: table.number, restaurantName: table.restaurant.name, restaurantTimezone: table.restaurant.timezone,
+      sessionId: null, menu: [], order: null, ticket: null,
       submittedOrders: [], sessionTotalMinor: 0, sessionEnded: Boolean(session?.endedAt),
     }
     if (!session || session.endedAt) return withoutSession

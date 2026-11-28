@@ -25,7 +25,7 @@ Money is stored as integer satang. Order lines snapshot the name and price, so m
 Needs Node 22+, Docker, and npm.
 
 ```sh
-cp .env.example .env            # set WEBHOOK_SECRET, KITCHEN_API_KEY, staff passwords
+cp .env.example .env            # set DATABASE_URL to match local Postgres, plus secrets and staff passwords
 docker compose up -d
 npm ci
 npx prisma migrate deploy

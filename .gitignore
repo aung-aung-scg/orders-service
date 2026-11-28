@@ -3,7 +3,7 @@ node_modules
 .env
 
 /generated/prisma
-/uploads/menu/
+/uploads/
 
 node_modules
 dist
